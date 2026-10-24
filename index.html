@@ -1,0 +1,2113 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Расписание автобусов — Берёзовка АК</title>
+    <meta name="description" content="Автобусы через остановку Берёзовка АК: ближайшие рейсы, фильтры по дням недели, направлению и населённому пункту.">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#0b0f12">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Автобусы">
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b0f12;
+            --bg-grad: #0e1a17;
+            --surface: #14191e;
+            --surface-2: #1a2127;
+            --line: #262f36;
+            --line-soft: #1e262c;
+            --text: #e8eef0;
+            --muted: #93a3a9;
+            --dim: #63737a;
+            --accent: #45d67f;
+            --accent-ink: #06210f;
+            --accent-soft: #14301f;
+            --warn: #e9b45c;
+            --warn-soft: #2e2413;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --shadow: 0 1px 0 rgba(255, 255, 255, .03), 0 8px 24px -18px rgba(0, 0, 0, .9);
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+        }
+
+        html[data-theme="light"] {
+            color-scheme: light;
+            --bg: #f4f6f5;
+            --bg-grad: #eaf1ec;
+            --surface: #ffffff;
+            --surface-2: #f2f5f3;
+            --line: #dfe5e2;
+            --line-soft: #e8edea;
+            --text: #10181a;
+            --muted: #5d6b70;
+            --dim: #93a0a4;
+            --accent: #0f8f4a;
+            --accent-ink: #ffffff;
+            --accent-soft: #e2f4e9;
+            --warn: #a3690c;
+            --warn-soft: #fdf1dc;
+            --shadow: 0 1px 0 rgba(16, 24, 26, .02), 0 10px 26px -20px rgba(16, 24, 26, .5);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 0 env(safe-area-inset-bottom);
+            overflow-x: hidden;
+            background: var(--bg);
+            background-image: radial-gradient(120% 60% at 50% -10%, var(--bg-grad), transparent 70%);
+            background-repeat: no-repeat;
+            color: var(--text);
+            font-family: var(--font);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.35;
+        }
+
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0 12px 32px;
+        }
+
+        /* ---------- header ---------- */
+
+        .head {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: color-mix(in srgb, var(--bg) 88%, transparent);
+            backdrop-filter: saturate(140%) blur(12px);
+            -webkit-backdrop-filter: saturate(140%) blur(12px);
+            border-bottom: 1px solid var(--line-soft);
+            padding: 10px 12px 0;
+        }
+
+        .head-in {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .top {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        .top h1 {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-size: 15px;
+            font-weight: 650;
+            letter-spacing: .01em;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .top .now {
+            flex: 0 1 auto;
+            min-width: 0;
+            font-size: 12.5px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .top .now b {
+            display: block;
+            text-align: right;
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 650;
+            letter-spacing: .02em;
+        }
+
+        .icon-btn {
+            flex: none;
+            margin-left: auto;
+            width: 32px;
+            height: 32px;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--muted);
+            font-size: 15px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .icon-btn:active {
+            transform: scale(.94);
+        }
+
+        /* ---------- segmented controls ---------- */
+
+        .seg {
+            display: flex;
+            gap: 4px;
+            padding: 3px;
+            background: var(--surface-2);
+            border: 1px solid var(--line-soft);
+            border-radius: 999px;
+        }
+
+        .dir {
+            margin: 10px 0 8px;
+        }
+
+        .dir button {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 9px 6px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 13.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            transition: background .15s ease, color .15s ease;
+        }
+
+        .dir button[aria-pressed="true"] {
+            background: var(--accent);
+            color: var(--accent-ink);
+            box-shadow: 0 2px 10px -4px var(--accent);
+        }
+
+        .days {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) repeat(7, minmax(0, 1fr));
+            gap: 3px;
+            padding: 3px;
+            background: var(--surface-2);
+            border: 1px solid var(--line-soft);
+            border-radius: var(--radius-sm);
+        }
+
+        .days button {
+            position: relative;
+            min-width: 0;
+            padding: 7px 0 8px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 12.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            transition: background .15s ease, color .15s ease;
+        }
+
+        .days button.today {
+            color: var(--text);
+        }
+
+        .days button[aria-pressed="true"] {
+            background: var(--accent-soft);
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+
+        .days button.today::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 3px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--accent);
+            transform: translateX(-50%);
+        }
+
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 16px;
+            padding: 8px 2px 10px;
+        }
+
+        .picker {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            max-width: 100%;
+        }
+
+        .picker-btn {
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+            border: 0;
+            margin: 0;
+            padding: 5px 26px 5px 12px;
+            max-width: 100%;
+            color: var(--text);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+
+        .picker-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+            border-radius: 999px;
+        }
+
+        /* выпадающий список пунктов: свой, чтобы читался в обеих темах */
+        .picker-list {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 30;
+            margin: 0;
+            padding: 5px;
+            list-style: none;
+            min-width: 172px;
+            max-height: 58vh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, .45);
+        }
+
+        .picker-list[hidden] {
+            display: none;
+        }
+
+        .picker-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .picker-list li .tick {
+            margin-left: auto;
+            color: var(--accent);
+            opacity: 0;
+            font-weight: 700;
+        }
+
+        .picker-list li[aria-selected="true"] {
+            color: var(--accent);
+        }
+
+        .picker-list li[aria-selected="true"] .tick {
+            opacity: 1;
+        }
+
+        .picker-list li.active,
+        .picker-list li:hover {
+            background: var(--surface-2);
+        }
+
+        .picker::after {
+            content: "";
+            position: absolute;
+            right: 11px;
+            top: 50%;
+            width: 6px;
+            height: 6px;
+            border-right: 2px solid var(--dim);
+            border-bottom: 2px solid var(--dim);
+            transform: translateY(-70%) rotate(45deg);
+            transition: transform .16s ease;
+            pointer-events: none;
+        }
+
+        .picker.open::after {
+            border-color: var(--accent);
+            transform: translateY(-30%) rotate(-135deg);
+        }
+
+        .mode {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .switch .track {
+            width: 34px;
+            height: 20px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            position: relative;
+            transition: background .18s ease, border-color .18s ease;
+            flex: none;
+        }
+
+        .switch .track::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--dim);
+            transition: transform .18s cubic-bezier(.34, 1.4, .5, 1), background .18s ease;
+        }
+
+        .switch input:checked+.track {
+            background: var(--accent-soft);
+            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+        }
+
+        .switch input:checked+.track::after {
+            transform: translateX(14px);
+            background: var(--accent);
+        }
+
+        .switch input:focus-visible+.track {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* ---------- list ---------- */
+
+        main {
+            padding-top: 12px;
+        }
+
+        .hint {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            font-size: 12.5px;
+            line-height: 1.45;
+            color: var(--muted);
+            background: var(--surface-2);
+            border: 1px solid var(--line-soft);
+            border-radius: var(--radius-sm);
+            padding: 9px 11px;
+            margin-bottom: 10px;
+        }
+
+        .hint .i {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .group {
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin: 18px 2px 8px;
+        }
+
+        .group:first-child {
+            margin-top: 4px;
+        }
+
+        ul.list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+        li.trip {
+            background: var(--surface);
+            border: 1px solid var(--line-soft);
+            border-left: 3px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 11px 13px;
+            display: grid;
+            grid-template-columns: minmax(58px, auto) 1fr auto;
+            gap: 4px 12px;
+            align-items: center;
+            animation: rise .22s ease both;
+            animation-delay: var(--d, 0ms);
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+        }
+
+        li.trip[data-imminent] {
+            border-left-color: var(--accent);
+        }
+
+        li.trip.is-past {
+            opacity: .38;
+            box-shadow: none;
+        }
+
+        li.trip.is-past .time {
+            text-decoration: line-through;
+            text-decoration-thickness: 1px;
+        }
+
+        /* ---------- подробности рейса ---------- */
+
+        li.trip[data-expandable] {
+            cursor: pointer;
+        }
+
+        li.trip[data-expandable]:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        li.trip.open,
+        li.trip.open.is-past {
+            opacity: 1;
+            border-left-color: var(--accent);
+        }
+
+        .caret {
+            display: inline-block;
+            flex: none;
+            width: 5px;
+            height: 5px;
+            margin-left: 0;
+            border-right: 1.5px solid var(--dim);
+            border-bottom: 1.5px solid var(--dim);
+            transform: rotate(45deg) translate(-1px, -1px);
+            transition: transform .18s ease;
+        }
+
+        li.trip.open .caret {
+            transform: rotate(-135deg) translate(-2px, -2px);
+        }
+
+        .details {
+            grid-column: 1 / -1;
+            margin-top: 9px;
+            padding-top: 9px;
+            border-top: 1px dashed var(--line);
+            font-size: 12.5px;
+            cursor: default;
+        }
+
+        .details[hidden] {
+            display: none;
+        }
+
+        .d-full {
+            font-size: 13px;
+            font-weight: 650;
+            letter-spacing: .01em;
+        }
+
+        .d-days {
+            margin-top: 2px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .d-times {
+            margin-top: 8px;
+            display: grid;
+            gap: 3px;
+        }
+
+        .d-row {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .d-k {
+            color: var(--dim);
+        }
+
+        .d-v {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .d-src {
+            margin-top: 8px;
+            color: var(--dim);
+            font-size: 11.5px;
+        }
+
+        /* ---------- остановки рейса ---------- */
+
+        .stops {
+            margin-top: 9px;
+            display: grid;
+            gap: 2px;
+        }
+
+        .stop {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 52px 46px;
+            gap: 8px;
+            align-items: baseline;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stop .s-n {
+            color: var(--muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .stop .s-km {
+            text-align: right;
+            color: var(--dim);
+            font-size: 11.5px;
+        }
+
+        .stop .s-t {
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .stop.head {
+            margin-bottom: 3px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid var(--line-soft);
+            color: var(--dim);
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .stop.head .s-n,
+        .stop.head .s-km,
+        .stop.head .s-t {
+            color: var(--dim);
+            font-size: 10.5px;
+            font-weight: 500;
+        }
+
+        .stop.here .s-n,
+        .stop.here .s-t {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .stop.sel .s-n,
+        .stop.sel .s-t {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        /* ---------- метки на карточке ---------- */
+
+        .to .place .tag {
+            flex: none;
+            margin-left: 0;
+            padding: 1px 5px;
+            border-radius: 999px;
+            background: var(--warn-soft);
+            color: var(--warn);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            vertical-align: 2px;
+        }
+
+        .to .meta .via {
+            color: var(--dim);
+        }
+
+        .time {
+            font-size: 25px;
+            font-weight: 680;
+            letter-spacing: .01em;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.05;
+            color: var(--text);
+        }
+
+        .to {
+            min-width: 0;
+        }
+
+        .to .place {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            font-size: 15.5px;
+            font-weight: 600;
+            min-width: 0;
+        }
+
+        .to .place .p-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .to .meta {
+            margin-top: 2px;
+            font-size: 12px;
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px 8px;
+            align-items: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .side {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .chip {
+            font-size: 12px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            color: var(--muted);
+            white-space: nowrap;
+            border: 1px solid var(--line-soft);
+        }
+
+        .chip.now {
+            background: var(--accent);
+            color: var(--accent-ink);
+            border-color: transparent;
+        }
+
+        .chip.soon {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+        }
+
+        .ago {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--dim);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .arr {
+            font-size: 11.5px;
+            color: var(--dim);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .more {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: var(--radius);
+            border: 1px dashed var(--line);
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .more:active {
+            background: var(--surface-2);
+        }
+
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 16px;
+            font-size: 14px;
+        }
+
+        .empty .big {
+            font-size: 30px;
+            display: block;
+            margin-bottom: 8px;
+            opacity: .7;
+        }
+
+        footer {
+            margin-top: 24px;
+            padding-top: 14px;
+            border-top: 1px solid var(--line-soft);
+            font-size: 11.5px;
+            line-height: 1.6;
+            color: var(--dim);
+        }
+
+        footer a {
+            color: var(--muted);
+        }
+
+        /* ---------- напоминания ---------- */
+
+        .top-actions {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+            flex: none;
+        }
+
+        .top-actions .icon-btn {
+            margin-left: 0;
+        }
+
+        .icon-btn.on {
+            color: var(--accent);
+            background: var(--accent-soft);
+            border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+
+        .notify-pop {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            z-index: 40;
+            width: 290px;
+            max-width: calc(100vw - 24px);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 11px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, .45);
+        }
+
+        .notify-pop[hidden] {
+            display: none;
+        }
+
+        .np-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 12.5px;
+            color: var(--muted);
+        }
+
+        .np-switch {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .np-k {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .seg.np-seg {
+            flex: none;
+        }
+
+        .seg.np-seg button {
+            min-width: 30px;
+            padding: 5px 9px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s ease, color .15s ease;
+        }
+
+        .seg.np-seg button[aria-pressed="true"] {
+            background: var(--accent);
+            color: var(--accent-ink);
+        }
+
+        .np-note {
+            font-size: 11.5px;
+            line-height: 1.4;
+            color: var(--dim);
+        }
+
+        .np-note:empty {
+            display: none;
+        }
+
+        .pinned {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 5px 8px;
+            padding: 8px 11px;
+            margin-bottom: 10px;
+            border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+            border-radius: var(--radius-sm);
+            background: var(--accent-soft);
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pinned[hidden] {
+            display: none;
+        }
+
+        .pinned .bell {
+            color: var(--accent);
+        }
+
+        .pinned .p-item {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .pinned .p-dep {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .pinned .p-to {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .pinned .p-rel {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .pinned .p-sep {
+            color: var(--dim);
+        }
+
+        li.trip.flash {
+            animation: flashrow .8s ease 3;
+        }
+
+        @keyframes flashrow {
+            50% {
+                border-left-color: var(--accent);
+                box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+            }
+        }
+
+        @media (max-width: 400px) {
+            .days button {
+                font-size: 11.5px;
+                letter-spacing: -.01em;
+                padding: 7px 0;
+            }
+
+            .days button[data-day="auto"] {
+                font-size: 10.5px;
+            }
+
+            li.trip {
+                grid-template-columns: minmax(52px, auto) 1fr auto;
+                padding: 10px 11px;
+                gap: 4px 9px;
+            }
+
+            li.trip .time {
+                font-size: 22px;
+            }
+
+            .to .place {
+                font-size: 15px;
+            }
+
+            .side {
+                gap: 3px;
+            }
+
+            .chip {
+                font-size: 11.5px;
+                padding: 3px 7px;
+            }
+
+            .arr {
+                font-size: 11px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: .001ms !important;
+                transition-duration: .001ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="head">
+        <div class="head-in">
+            <div class="top">
+                <h1>Берёзовка АК · автобусы</h1>
+                <div class="now"><span id="clock">—</span><b id="todayLabel">—</b></div>
+                <div class="top-actions">
+                    <button class="icon-btn" id="alertBtn" type="button" aria-pressed="false"
+                        aria-haspopup="dialog" aria-expanded="false"
+                        title="Напоминания о ближайших рейсах" aria-label="Напоминания">🔔</button>
+                    <button class="icon-btn" id="themeBtn" type="button" title="Светлая / тёмная тема"
+                        aria-label="Переключить тему">◐</button>
+                    <div class="notify-pop" id="notifyPop" role="dialog" aria-label="Настройки напоминаний" hidden>
+                        <label class="np-row np-switch" for="npOn">
+                            <span class="np-k">Напоминать о ближайших рейсах</span>
+                            <span class="switch"><input type="checkbox" id="npOn"><span class="track"></span></span>
+                        </label>
+                        <div class="np-row">
+                            <span class="np-k">Рейсов</span>
+                            <div class="seg np-seg" data-role="count" role="group" aria-label="Сколько рейсов">
+                                <button type="button" data-count="1">1</button>
+                                <button type="button" data-count="2">2</button>
+                                <button type="button" data-count="3">3</button>
+                            </div>
+                        </div>
+                        <div class="np-row">
+                            <span class="np-k">Напомнить за, мин</span>
+                            <div class="seg np-seg" data-role="lead" role="group" aria-label="За сколько минут напомнить">
+                                <button type="button" data-lead="0">0</button>
+                                <button type="button" data-lead="5">5</button>
+                                <button type="button" data-lead="10">10</button>
+                                <button type="button" data-lead="15">15</button>
+                            </div>
+                        </div>
+                        <label class="np-row np-switch" for="npByPlace">
+                            <span class="np-k">Учитывать фильтр по пункту</span>
+                            <span class="switch"><input type="checkbox" id="npByPlace"><span class="track"></span></span>
+                        </label>
+                        <div class="np-note" id="npNote"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="seg dir" role="group" aria-label="Направление">
+                <button type="button" data-dir="out" aria-pressed="true">Из Берёзовки →</button>
+                <button type="button" data-dir="in" aria-pressed="false">← В Берёзовку</button>
+            </div>
+
+            <div class="days" id="days" role="group" aria-label="День недели"></div>
+
+            <div class="filters">
+                <div class="picker" id="placePicker">
+                    <button type="button" class="picker-btn" id="placeBtn"
+                            aria-haspopup="listbox" aria-expanded="false" title="Фильтр по населённому пункту">
+                        <span id="placeBtnLabel">Все пункты</span>
+                    </button>
+                    <ul class="picker-list" id="placeList" role="listbox"
+                        aria-label="Населённый пункт" hidden></ul>
+                </div>
+                <div class="mode">
+                    <label class="switch">
+                        <input type="checkbox" id="allDay">
+                        <span class="track"></span>
+                        <span>Весь день</span>
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="showPast">
+                        <span class="track"></span>
+                        <span>Прошедшие</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="wrap">
+        <main>
+            <div id="notice" role="status" aria-live="polite"></div>
+            <div id="pinned" class="pinned" hidden></div>
+            <div id="list"></div>
+        </main>
+
+        <footer>
+            Остановка «Берёзовка АК» (автовокзал). Время местное (UTC+3).
+            По умолчанию — ближайшие рейсы на сегодня; день недели, направление и пункт можно выбрать выше.
+            Нажмите на рейс — покажем все остановки рейса с временами и километрами.
+            Данные: <a href="https://ticketbus.by/" target="_blank" rel="noopener">ticketbus.by</a>,
+            обновлено <span id="srcDate">—</span>.
+            Расписание может меняться — уточняйте в кассе.
+        </footer>
+    </div>
+
+    <script src="data.js"></script>
+    <script>
+(function () {
+    "use strict";
+
+    var SCH = window.SCHEDULE || {};
+    var DATA = SCH.trips || [];
+    var STATIONS = SCH.stations || [];
+    var ADDR = SCH.addr || [];
+    var CITIES = SCH.cities || [];
+    var UPDATED = SCH.updated || "";
+
+    var DAY_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+    var DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];   // index 0 = Monday
+    var STORE = "berezovka.v2";
+    var LIMIT = 8;
+
+    /* ---------- PWA: service worker ---------- */
+    // Кэш и установка на главный экран работают только в защищённом контексте
+    // (https:// или localhost). На http://IP страница остаётся обычной страницей.
+    var SW_READY = null;
+    (function registerSW() {
+        if (!("serviceWorker" in navigator)) return;
+        var host = location.hostname;
+        var secure = location.protocol === "https:" ||
+            host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+        if (!secure) return;
+        SW_READY = navigator.serviceWorker.register("./sw.js").catch(function () {
+            return null;   // например, старый браузер или запрет приватного режима
+        });
+    })();
+
+    var state = {
+        dir: "out",
+        day: "auto",      // "auto" | 0..6 (Monday based)
+        place: "all",     // "all" | название крупного пункта (как в данных)
+        allDay: false,
+        showPast: false,
+        openKey: "",      // у какой карточки раскрыты остановки
+        notify: {         // напоминания о ближайших рейсах
+            on: false,
+            count: 2,     // сколько ближайших показывать
+            lead: 0,      // за сколько минут напомнить (0 — в момент отправления)
+            byPlace: false
+        }
+    };
+
+    /* ---------- storage ---------- */
+
+    var SYSTEM_LIGHT = !!(window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: light)").matches);
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        document.querySelector('meta[name="theme-color"]')
+            .setAttribute("content", theme === "light" ? "#f4f6f5" : "#0b0f12");
+    }
+
+    function initTheme() {
+        var saved = "";
+        try { saved = localStorage.getItem(STORE + ".theme") || ""; } catch (e) { }
+        applyTheme(saved === "light" || saved === "dark" ? saved
+            : (SYSTEM_LIGHT ? "light" : "dark"));
+    }
+
+    function loadPrefs() {
+        try {
+            var raw = localStorage.getItem(STORE) || localStorage.getItem("berezovka.v1");
+            if (!raw) return;
+            var saved = JSON.parse(raw);
+            if (saved.dir === "out" || saved.dir === "in") state.dir = saved.dir;
+            if (typeof saved.place === "string" && saved.place) state.place = saved.place;
+            if (typeof saved.allDay === "boolean") state.allDay = saved.allDay;
+            if (saved.notify && typeof saved.notify === "object") {
+                if (typeof saved.notify.on === "boolean") state.notify.on = saved.notify.on;
+                if ([1, 2, 3].indexOf(saved.notify.count) >= 0) state.notify.count = saved.notify.count;
+                if ([0, 5, 10, 15].indexOf(saved.notify.lead) >= 0) state.notify.lead = saved.notify.lead;
+                if (typeof saved.notify.byPlace === "boolean") state.notify.byPlace = saved.notify.byPlace;
+            }
+        } catch (e) { /* приватный режим — работаем без настроек */ }
+    }
+
+    function savePrefs() {
+        try {
+            localStorage.setItem(STORE, JSON.stringify({
+                dir: state.dir,
+                place: state.place,
+                allDay: state.allDay,
+                notify: state.notify
+            }));
+            localStorage.setItem(STORE + ".theme",
+                document.documentElement.getAttribute("data-theme") || "");
+        } catch (e) { }
+    }
+
+    /* ---------- helpers ---------- */
+
+    function nowDay() { return (new Date().getDay() + 6) % 7; }   // 0 = Пн
+    function nowMin() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+    function nowStamp() { var d = new Date(); return d.getDay() * 1440 + d.getHours() * 60 + d.getMinutes(); }
+
+    function toMin(t) {
+        if (!t || String(t).indexOf(":") < 0) return null;
+        var p = String(t).split(":");
+        return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+    }
+
+    function esc(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+
+    // «МИНСК» -> «Минск», «ЮгоЗападная» -> «Юго Западная»
+    function titleCase(s) {
+        var v = String(s || "").replace(/([а-яё])([А-ЯЁ])/g, "$1 $2");
+        return v.split(/\s+/).map(function (w) {
+            return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "";
+        }).join(" ");
+    }
+
+    // название остановки для карточки: «ЛИДА АВ» -> «Лида»,
+    // «МИНСК АС ЮгоЗападная» -> «Минск (Юго Западная)», «ЕДКИ ПОВ» -> «Едки Пов»
+    // (\b в JS работает только с латиницей, поэтому «ЗАЕЗД» проверяем через (\s|$))
+    function placeLabel(name) {
+        var raw = String(name || "").trim();
+        if (/^ЗАЕЗД(\s|$)/i.test(raw)) {
+            var parts = raw.split(/[\s-]+/);
+            return titleCase(parts[parts.length - 1] || raw) + " (заезд)";
+        }
+        var m = raw.match(/^(.*?)\s(АС|АВ|АК)(?:\s+(.*))?$/);
+        if (m) return titleCase(m[1]) + (m[3] ? " (" + titleCase(m[3]) + ")" : "");
+        return titleCase(raw);
+    }
+
+    function stationName(i) { return STATIONS[i] || "—"; }
+    function cityName(i) { return i >= 0 && CITIES[i] ? titleCase(CITIES[i]) : ""; }
+
+    // «БЕРЁЗОВКА АК» — наша станция (в источнике бывает и без «ё»)
+    function isStation(s) { return /^БЕР[ЁЕ]ЗОВКА(\s|$)/.test(String(s || "")); }
+
+    function runsToday(trip, dayIdx) {
+        return trip.w.indexOf(dayIdx) >= 0;
+    }
+
+    function selectedCity() {
+        return state.place === "all" ? -1 : CITIES.indexOf(state.place);
+    }
+
+    // индекс остановки Берёзовки на этом рейсе
+    function hereIdx(trip) {
+        for (var i = 0; i < trip.s.length; i++) {
+            if (isStation(STATIONS[trip.s[i][0]])) return i;
+        }
+        return -1;
+    }
+
+    // индекс выбранного пункта на этом рейсе по ходу движения,
+    // -1 если рейс через него не идёт: из Берёзовки пункт должен быть дальше,
+    // в Берёзовку — раньше (рейс должен оттуда ехать, а не туда)
+    function reachStop(trip, cityIdx) {
+        if (cityIdx < 0) return -1;
+        var here = hereIdx(trip), i, idx;
+        if (here < 0) return -1;
+        for (i = 0; i < trip.rc.length; i++) {
+            if (trip.rc[i][0] !== cityIdx) continue;
+            idx = trip.rc[i][1];
+            if (trip.d === "out" ? idx > here : idx < here) return idx;
+        }
+        return -1;
+    }
+
+    // пункты, до которых (из Берёзовки) или откуда (в Берёзовку) ходят рейсы
+    function cityList() {
+        var seen = {}, out = [], i, j, t, here, idx, c;
+        for (i = 0; i < DATA.length; i++) {
+            t = DATA[i];
+            if (t.d !== state.dir) continue;
+            here = hereIdx(t);
+            if (here < 0) continue;
+            for (j = 0; j < t.rc.length; j++) {
+                idx = t.rc[j][1];
+                if (t.d === "out" ? idx <= here : idx >= here) continue;
+                c = t.rc[j][0];
+                if (!seen[c]) { seen[c] = 1; out.push(CITIES[c]); }
+            }
+        }
+        return out;
+    }
+
+    function inPlace(trip) {
+        var sel = selectedCity();
+        return sel < 0 || reachStop(trip, sel) >= 0;
+    }
+
+    function placeNote() {
+        return state.place === "all" ? "" : " по пункту «" + titleCase(state.place) + "»";
+    }
+
+    // время выбранной остановки: из Берёзовки — прибытие, в Берёзовку — отправление
+    function stopTime(trip, i) {
+        var st = trip.s[i];
+        if (!st) return "";
+        return trip.d === "out" ? (st[3] || st[2]) : (st[2] || st[3]);
+    }
+
+    // основное время рейса — отправление из пункта: по нему сортируем, показываем
+    // «через N мин» и отбираем прошедшие рейсы; прибытие — вспомогательное
+    function depTime(trip, sel) {
+        if (trip.d !== "in") return trip.t;      // из Берёзовки — отправление с Берёзовки
+        if (sel >= 0) {                          // в Берёзовку — из выбранного пункта
+            var si = reachStop(trip, sel);
+            return si >= 0 ? stopTime(trip, si) : "";
+        }
+        return trip.a;                           // ...или из начала маршрута
+    }
+
+    // вспомогательное время — прибытие в пункт назначения этого направления
+    function arrTime(trip, sel) {
+        if (trip.d === "in") return trip.t;      // прибытие в Берёзовку
+        if (sel >= 0) {                          // из Берёзовки — прибытие в выбранный пункт
+            var si = reachStop(trip, sel);
+            return si >= 0 ? (trip.s[si][3] || trip.s[si][2]) : "";
+        }
+        return trip.a;                           // ...или на конечную маршрута
+    }
+
+    // индекс города конечной остановки маршрута (-1 — конечная не крупный пункт)
+    function terminusCity(trip) {
+        var last = trip.s.length - 1;
+        for (var i = 0; i < trip.rc.length; i++) {
+            if (trip.rc[i][1] === last) return trip.rc[i][0];
+        }
+        return -1;
+    }
+
+    // переход через сутки: прибытие раньше отправления
+    function crossed(trip, dep, arr) {
+        var a = toMin(arr), b = toMin(dep);
+        if (a === null || b === null) return false;
+        return a < b;
+    }
+
+    function byTime(a, b) {
+        var sel = selectedCity();
+        return (toMin(depTime(a, sel)) || 0) - (toMin(depTime(b, sel)) || 0);
+    }
+
+    function pastCount(list) {
+        var n = nowMin(), sel = selectedCity(), k = 0;
+        for (var i = 0; i < list.length; i++) {
+            var m = toMin(depTime(list[i], sel));
+            if (m !== null && m < n) k++;
+        }
+        return k;
+    }
+
+    function plural(n, one, few, many) {
+        var m10 = n % 10, m100 = n % 100;
+        if (m10 === 1 && m100 !== 11) return one;
+        if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+        return many;
+    }
+
+    /* ---------- markup ---------- */
+
+    function chipFor(rel) {
+        if (rel === null || rel < 0) return "";
+        if (rel === 0) return '<span class="chip now">сейчас</span>';
+        if (rel <= 15) return '<span class="chip now">через ' + rel + ' мин</span>';
+        if (rel <= 60) return '<span class="chip soon">через ' + rel + ' мин</span>';
+        return '<span class="chip">через ' + Math.round(rel / 60) + ' ч</span>';
+    }
+
+    function agoText(rel) {
+        var m = -rel;
+        if (m < 60) return m + " мин назад";
+        var h = Math.floor(m / 60);
+        return h + " " + plural(h, "час", "часа", "часов") + " назад";
+    }
+
+    function tripKey(trip) {
+        return trip.d + "|" + trip.t + "|" + trip.r + "|" + stationName(trip.p);
+    }
+
+    // все остановки рейса: показывается по нажатию на карточку
+    function detailsHTML(trip) {
+        var sel = selectedCity();
+        var selStop = sel >= 0 ? reachStop(trip, sel) : -1;
+        var rows = "";
+        for (var i = 0; i < trip.s.length; i++) {
+            var st = trip.s[i];
+            var cls = "stop";
+            if (i === trip.at) cls += " here";
+            if (i === selStop) cls += " sel";
+            rows += '<div class="' + cls + '">' +
+                '<span class="s-n">' + esc(stationName(st[0])) + '</span>' +
+                '<span class="s-km">' + (st[1] ? st[1] + " км" : "") + '</span>' +
+                '<span class="s-t">' + esc(st[2] || st[3] || "—") + '</span>' +
+                '</div>';
+        }
+        return '<div class="details" hidden>' +
+            '<div class="d-full">' + esc(trip.r) + '</div>' +
+            '<div class="d-days">Дни в источнике: ' + esc(trip.dr || trip.dl) + '</div>' +
+            (trip.note ? '<div class="d-days">' + esc(trip.note) + '</div>' : "") +
+            '<div class="stops"><div class="stop head">' +
+            '<span class="s-n">Остановка</span><span class="s-km">Км</span><span class="s-t">Время</span>' +
+            '</div>' + rows + '</div>' +
+            '<div class="d-src">источник: ticketbus.by</div>' +
+            '</div>';
+    }
+
+    function tripHTML(trip, rel, idx, dayNote) {
+        var sel = selectedCity();
+        var via = false, label;
+
+        if (sel < 0) {
+            label = placeLabel(stationName(trip.p));
+        } else {
+            label = cityName(sel);
+            // «сквозной»: из Берёзовки — рейс идёт дальше выбранного пункта,
+            // в Берёзовку — рейс идёт дальше самой Берёзовки (к конечной маршрута)
+            via = trip.d === "out"
+                ? trip.pc !== sel
+                : trip.at < trip.s.length - 1;
+        }
+
+        var dep = depTime(trip, sel);
+        var arr = arrTime(trip, sel);
+
+        var meta = [];
+        if (trip.dl) meta.push('<span>' + esc(trip.dl) + '</span>');
+        if (dayNote) meta.push('<span class="dow">' + esc(dayNote) + '</span>');
+        if (via) {
+            // «далее до» — всегда конечная остановка маршрута, а не пункт отправления
+            var tci = terminusCity(trip);
+            var tname = stationName(trip.s[trip.s.length - 1][0]);
+            meta.push('<span class="via">далее до ' +
+                esc(tci >= 0 ? cityName(tci) : placeLabel(tname)) + '</span>');
+        }
+        if (crossed(trip, dep, arr)) {
+            meta.push('<span>на следующие сутки</span>');
+        }
+
+        var isPast = rel !== null && rel < 0;
+        var side = isPast ? '<span class="ago">' + agoText(rel) + '</span>' : chipFor(rel);
+        side += '<span class="arr">' + (arr
+            ? "приб. " + esc(arr)
+            : "время не указано") + '</span>';
+
+        var imminent = rel !== null && rel >= 0 && rel <= 60;
+        var cls = "trip" + (isPast ? " is-past" : "");
+
+        return '<li class="' + cls + '" style="--d:' + Math.min(idx, 10) * 18 + 'ms"' +
+            ' data-expandable data-key="' + esc(tripKey(trip)) + '"' +
+            ' role="button" tabindex="0" aria-expanded="false"' +
+            (imminent ? ' data-imminent' : '') + '>' +
+            '<div class="time">' + esc(dep) + '</div>' +
+            '<div class="to">' +
+            '<div class="place" title="' + esc(trip.r) + '">' +
+            '<span class="p-name">' + (trip.d === "out" ? "→ " : "← ") + esc(label) + '</span>' +
+            (via ? '<span class="tag">сквозной</span>' : '') +
+            '<span class="caret" aria-hidden="true"></span></div>' +
+            '<div class="meta">' + meta.join("") + '</div>' +
+            '</div>' +
+            '<div class="side">' + side + '</div>' +
+            detailsHTML(trip) +
+            '</li>';
+    }
+
+    function listHTML(items, now) {
+        var sel = selectedCity();
+        var html = '<ul class="list">';
+        items.forEach(function (t, i) {
+            var rel = now === null ? null : toMin(depTime(t, sel)) - now;
+            html += tripHTML(t, rel, i);
+        });
+        return html + '</ul>';
+    }
+
+    /* ---------- render ---------- */
+
+    var listEl = document.getElementById("list");
+    var noticeEl = document.getElementById("notice");
+
+    function renderDays() {
+        var box = document.getElementById("days");
+        var today = nowDay();
+        var html = '<button type="button" data-day="auto" aria-pressed="' +
+            (state.day === "auto") + '" title="Ближайшие рейсы на сегодня" ' +
+            (state.day === "auto" ? 'class="today"' : '') + '>Сегодня</button>';
+        for (var i = 0; i < 7; i++) {
+            html += '<button type="button" data-day="' + i + '" aria-pressed="' +
+                (state.day === i) + '" title="' + DAY_NAMES[(i + 1) % 7] + '"' +
+                (i === today ? ' class="today"' : '') + '>' + DAY_SHORT[i] + '</button>';
+        }
+        box.innerHTML = html;
+    }
+
+    function setDir(dir) {
+        state.dir = dir;
+        savePrefs();
+        renderPlaces();   // список пунктов зависит от направления
+        var btns = document.querySelectorAll(".dir button");
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].setAttribute("aria-pressed", String(btns[i].dataset.dir === dir));
+        }
+        render();
+    }
+
+    // ---------- выпадающий список пунктов ----------
+
+    function placeText(v) { return v === "all" ? "Все пункты" : titleCase(v); }
+
+    function placeRow(value, text) {
+        return '<li role="option" data-value="' + esc(value) + '" aria-selected="' +
+            (value === state.place ? "true" : "false") + '">' + esc(text) +
+            '<span class="tick" aria-hidden="true">✓</span></li>';
+    }
+
+    function renderPlaces() {
+        var cities = cityList();
+        if (state.place !== "all" && cities.indexOf(state.place) < 0) state.place = "all";
+        var html = placeRow("all", "Все пункты");
+        cities.sort(function (a, b) { return a.localeCompare(b, "ru"); })
+            .forEach(function (c) { html += placeRow(c, titleCase(c)); });
+        document.getElementById("placeList").innerHTML = html;
+        document.getElementById("placeBtnLabel").textContent = placeText(state.place);
+    }
+
+    function placeItems() {
+        return document.getElementById("placeList").querySelectorAll("li[data-value]");
+    }
+
+    function setActivePlace(li) {
+        var items = placeItems();
+        for (var i = 0; i < items.length; i++) {
+            items[i].classList.toggle("active", items[i] === li);
+        }
+    }
+
+    function openPlaces(open) {
+        var list = document.getElementById("placeList");
+        list.hidden = !open;
+        document.getElementById("placeBtn").setAttribute("aria-expanded", String(!!open));
+        document.getElementById("placePicker").classList.toggle("open", !!open);
+        if (!open) return;
+        var cur = list.querySelector('li[aria-selected="true"]') || list.firstElementChild;
+        setActivePlace(cur);
+        if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" });
+    }
+
+    function moveActivePlace(step) {
+        var items = placeItems();
+        if (!items.length) return;
+        var at = 0, i;
+        for (i = 0; i < items.length; i++) if (items[i].classList.contains("active")) { at = i; break; }
+        var next = (at + step + items.length) % items.length;
+        setActivePlace(items[next]);
+        if (items[next].scrollIntoView) items[next].scrollIntoView({ block: "nearest" });
+    }
+
+    function setPlace(value) {
+        state.place = value || "all";
+        savePrefs();
+        renderPlaces();
+        openPlaces(false);
+        render();
+    }
+
+    function renderList() {
+        var d = new Date();
+        document.getElementById("clock").textContent =
+            ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+        document.getElementById("todayLabel").textContent = DAY_NAMES[d.getDay()];
+
+        var todayIdx = nowDay();
+        var dayIdx = state.day === "auto" ? todayIdx : state.day;
+        var isToday = dayIdx === todayIdx;
+        var now = nowMin();
+
+        document.getElementById("allDay").checked = state.allDay;
+        document.getElementById("showPast").checked = state.showPast;
+
+        var all = DATA.filter(function (t) {
+            return t.d === state.dir && inPlace(t) && runsToday(t, dayIdx);
+        }).sort(byTime);
+
+        var past = isToday ? pastCount(all) : 0;
+        var upcoming = all.length - past;
+        var trips, hidden = 0, notice = "";
+
+        if (!isToday || state.allDay || state.showPast) {
+            trips = all;
+        } else if (upcoming > 0) {
+            trips = all.slice(past, past + LIMIT);
+            hidden = upcoming - trips.length;
+        } else {
+            trips = [];
+        }
+
+        // сегодня всё уехало — подсказываем ближайшие рейсы завтрашнего дня
+        if (isToday && !state.allDay && !state.showPast && !upcoming) {
+            var nextDay = (dayIdx + 1) % 7;
+            var next = DATA.filter(function (t) {
+                return t.d === state.dir && inPlace(t) && runsToday(t, nextDay);
+            }).sort(byTime).slice(0, 4);
+            if (!next.length) {
+                noticeEl.innerHTML = info("На сегодня и завтра рейсов" + placeNote() + " нет.");
+                listEl.innerHTML = "";
+            } else {
+                noticeEl.innerHTML = info("На сегодня рейсов" + placeNote() +
+                    " больше нет. Ближайшие — завтра, " + depTime(next[0], selectedCity()) + ".");
+                listEl.innerHTML = '<div class="group">Завтра · ' + DAY_SHORT[nextDay] + '</div>' +
+                    listHTML(next, null);
+            }
+            return;
+        }
+
+        if (isToday && !state.allDay && !state.showPast && past) {
+            notice = "Сегодня уже прошло " + past + " " +
+                plural(past, "рейс", "рейса", "рейсов") + placeNote() + ".";
+        }
+        noticeEl.innerHTML = notice ? info(notice) : "";
+
+        if (!trips.length) {
+            listEl.innerHTML = emptyHTML();
+            return;
+        }
+
+        var html = listHTML(trips, isToday ? now : null);
+
+        if (hidden > 0) {
+            html += '<button class="more" type="button" id="moreBtn">Показать весь день — ещё ' +
+                hidden + ' ' + plural(hidden, "рейс", "рейса", "рейсов") + '</button>';
+        } else if (isToday && !state.allDay && !state.showPast && past) {
+            html += '<button class="more" type="button" id="moreBtn">Показать прошедшие · ' +
+                past + '</button>';
+        }
+
+        listEl.innerHTML = html;
+
+        var more = document.getElementById("moreBtn");
+        if (more) {
+            more.addEventListener("click", function () {
+                state.allDay = true;
+                savePrefs();
+                render();
+            });
+        }
+
+        restoreOpen();
+    }
+
+    /* ---------- карточка «остановки рейса» ---------- */
+
+    function setOpen(li, open) {
+        li.classList.toggle("open", open);
+        li.setAttribute("aria-expanded", String(open));
+        var det = li.querySelector(".details");
+        if (det) det.hidden = !open;
+    }
+
+    function restoreOpen() {
+        if (!state.openKey) return;
+        var items = listEl.querySelectorAll("li.trip");
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.key === state.openKey) {
+                setOpen(items[i], true);
+                return;
+            }
+        }
+    }
+
+    function toggleTrip(li) {
+        var open = !li.classList.contains("open");
+        var items = listEl.querySelectorAll("li.trip.open");
+        for (var i = 0; i < items.length; i++) setOpen(items[i], false);
+        setOpen(li, open);
+        state.openKey = open ? li.dataset.key : "";
+    }
+
+    function info(text) {
+        return '<div class="hint"><span class="i">i</span><span>' + esc(text) + '</span></div>';
+    }
+
+    function emptyHTML() {
+        return '<div class="empty"><span class="big">🚌</span>' +
+            'В направлении «' + esc(dirLabel(state.dir)) + '»' + esc(placeNote()) +
+            ' на этот день рейсов нет.<br>' +
+            'Попробуйте другой день недели' +
+            (state.place === "all" ? '' : ' или пункт') + '.</div>';
+    }
+
+    function dataError() {
+        return '<div class="empty"><span class="big">⚠️</span>' +
+            'Расписание не загрузилось.<br>' +
+            'Рядом с <code>index.html</code> должен лежать файл <code>data.js</code>.</div>';
+    }
+
+    function dirLabel(dir) {
+        return dir === "out" ? "Из Берёзовки" : "В Берёзовку";
+    }
+
+    /* ---------- напоминания о ближайших рейсах ---------- */
+
+    // системные уведомления возможны только в secure context (HTTPS / localhost)
+    var CAN_NOTIFY = (typeof Notification !== "undefined") && !!window.isSecureContext;
+
+    var BASE_TITLE = document.title;
+    var alerted = {};    // что уже просигналили в этой сессии
+    var audioCtx = null;
+
+    function notifySel() { return state.notify.byPlace ? selectedCity() : -1; }
+    function notifyDep(t) { return depTime(t, notifySel()); }
+
+    // ближайшие рейсы по времени отправления (направление и день — как на странице)
+    function nextTrips(n) {
+        var todayIdx = nowDay();
+        var dayIdx = state.day === "auto" ? todayIdx : state.day;
+        var now = nowMin();
+        var out = [], dayOffset = 0, guard = 0;
+        while (out.length < n && guard < 8) {
+            var di = (dayIdx + dayOffset) % 7;
+            var isToday = di === todayIdx;
+            var list = DATA.filter(function (t) {
+                return t.d === state.dir &&
+                    (!state.notify.byPlace || inPlace(t)) &&
+                    runsToday(t, di);
+            }).sort(function (a, b) {
+                return (toMin(notifyDep(a)) || 0) - (toMin(notifyDep(b)) || 0);
+            });
+            for (var i = 0; i < list.length && out.length < n; i++) {
+                var m = toMin(notifyDep(list[i]));
+                if (m === null) continue;
+                if (isToday && m < now) continue;      // рейс уже ушёл
+                out.push({ trip: list[i], dep: notifyDep(list[i]), m: m, di: di, away: dayOffset });
+            }
+            dayOffset++;
+            guard++;
+        }
+        return out;
+    }
+
+    function relText(rel) {
+        if (rel === null) return "";
+        if (rel <= 0) return "сейчас";
+        if (rel < 60) return "через " + rel + " мин";
+        return "через " + Math.round(rel / 60) + " ч";
+    }
+
+    function tripCaption(trip) {
+        if (state.notify.byPlace && selectedCity() >= 0) return cityName(selectedCity());
+        return placeLabel(stationName(trip.p));
+    }
+
+    function renderPinned() {
+        var box = document.getElementById("pinned");
+        if (!state.notify.on) { box.hidden = true; box.innerHTML = ""; return; }
+        var items = nextTrips(state.notify.count);
+        if (!items.length) { box.hidden = true; box.innerHTML = ""; return; }
+        var parts = ['<span class="bell" aria-hidden="true">🔔</span>'];
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            if (i) parts.push('<span class="p-sep">•</span>');
+            var when = it.away === 0 ? relText(it.m - nowMin())
+                : (it.away === 1 ? "завтра" : DAY_SHORT[it.di]);
+            parts.push('<span class="p-item">' +
+                '<span class="p-dep">' + esc(it.dep) + '</span>' +
+                '<span class="p-to">' + (it.trip.d === "out" ? "→ " : "← ") +
+                esc(tripCaption(it.trip)) + '</span>' +
+                '<span class="p-rel">' + esc(when) + '</span></span>');
+        }
+        box.innerHTML = parts.join("");
+        box.hidden = false;
+    }
+
+    // ближайший рейс в окне «за N минут до отправления»
+    function dueTrip() {
+        var items = nextTrips(state.notify.count);
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].away !== 0) continue;
+            var rel = items[i].m - nowMin();
+            if (rel >= 0 && rel <= state.notify.lead) return items[i];
+        }
+        return null;
+    }
+
+    function flashCard(trip) {
+        var key = tripKey(trip), els = listEl.querySelectorAll("li.trip");
+        for (var i = 0; i < els.length; i++) {
+            if (els[i].dataset.key !== key) continue;
+            var el = els[i];
+            el.classList.add("flash");
+            if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+            setTimeout(function () { el.classList.remove("flash"); }, 2600);
+            return;
+        }
+    }
+
+    // AudioContext должен создаться из жеста пользователя (клик по колокольчику)
+    function primeAudio() {
+        try {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            if (!audioCtx) audioCtx = new AC();
+            if (audioCtx.state === "suspended") audioCtx.resume();
+        } catch (e) { }
+    }
+
+    function beep() {
+        if (!audioCtx) return;
+        try {
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = "sine";
+            o.frequency.value = 880;
+            var t0 = audioCtx.currentTime;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(t0); o.stop(t0 + 0.36);
+        } catch (e) { }
+    }
+
+    // системное уведомление: на Android Chrome конструктор new Notification()
+    // не работает, поэтому показываем через service worker, а на десктопе
+    // без SW остаётся обычный путь
+    function notifyOS(it) {
+        if (!CAN_NOTIFY || Notification.permission !== "granted") return;
+        var title = "Берёзовка АК · " + dirLabel(it.trip.d);
+        var opts = {
+            body: it.dep + " " + (it.trip.d === "out" ? "→ " : "← ") +
+                tripCaption(it.trip) + " (" + relText(it.m - nowMin()) + ")",
+            icon: "icons/icon-192.png",
+            badge: "icons/badge-72.png",
+            tag: "berezovka-next",
+            renotify: true,
+            vibrate: [120, 60, 120],
+            data: { url: "./" }
+        };
+
+        function plain() {
+            try { new Notification(title, opts); } catch (e) { }
+        }
+
+        if (!SW_READY) { plain(); return; }
+        SW_READY.then(function (reg) {
+            if (reg && reg.active && reg.showNotification) {
+                reg.showNotification(title, opts).catch(plain);
+            } else {
+                plain();
+            }
+        }, plain);
+    }
+
+    function setTitle(t) { if (document.title !== t) document.title = t; }
+    function resetTitle() { if (document.title !== BASE_TITLE) document.title = BASE_TITLE; }
+
+    function tickReminders() {
+        if (!state.notify.on) {
+            document.getElementById("pinned").hidden = true;
+            resetTitle();
+            return;
+        }
+        renderPinned();
+        var it = dueTrip();
+        if (!it) { resetTitle(); return; }
+        var key = tripKey(it.trip) + "@" + it.dep;
+        setTitle("🚌 " + it.dep + " — " + relText(it.m - nowMin()));
+        if (!alerted[key]) {
+            alerted[key] = 1;
+            try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (e) { }
+            beep();
+            flashCard(it.trip);
+            notifyOS(it);
+        }
+    }
+
+    // список + напоминания
+    function render() {
+        renderList();
+        tickReminders();
+    }
+
+    /* ---------- wiring ---------- */
+
+    loadPrefs();
+    initTheme();
+    renderDays();
+
+    if (!DATA.length) {   // data.js не подключился — сообщаем прямо, без «рейсов нет»
+        document.getElementById("list").innerHTML = dataError();
+        return;
+    }
+
+    renderPlaces();
+
+    if (UPDATED) {
+        var stamp = UPDATED.slice(0, 10).split("-");
+        if (stamp.length === 3) {
+            document.getElementById("srcDate").textContent =
+                stamp[2] + "." + stamp[1] + "." + stamp[0];
+        }
+    }
+
+    var dirBtns = document.querySelectorAll(".dir button");
+    for (var i = 0; i < dirBtns.length; i++) {
+        dirBtns[i].setAttribute("aria-pressed", String(dirBtns[i].dataset.dir === state.dir));
+        dirBtns[i].addEventListener("click", function () { setDir(this.dataset.dir); });
+    }
+
+    document.getElementById("days").addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-day]");
+        if (!b) return;
+        state.day = b.dataset.day === "auto" ? "auto" : parseInt(b.dataset.day, 10);
+        renderDays();
+        render();
+    });
+
+    // выпадающий список пунктов: открытие, выбор, клавиатура, закрытие по клику вне
+    var placeBtn = document.getElementById("placeBtn");
+    var placeListEl = document.getElementById("placeList");
+
+    placeBtn.addEventListener("click", function () {
+        openPlaces(placeListEl.hidden);
+    });
+
+    placeListEl.addEventListener("click", function (e) {
+        var li = e.target.closest("li[data-value]");
+        if (li) setPlace(li.getAttribute("data-value"));
+    });
+
+    placeListEl.addEventListener("mousemove", function (e) {
+        var li = e.target.closest("li[data-value]");
+        if (li) setActivePlace(li);
+    });
+
+    placeBtn.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { openPlaces(false); return; }
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (placeListEl.hidden) openPlaces(true);
+            else moveActivePlace(e.key === "ArrowDown" ? 1 : -1);
+            return;
+        }
+        if ((e.key === "Enter" || e.key === " ") && !placeListEl.hidden) {
+            e.preventDefault();
+            var act = placeListEl.querySelector("li.active") ||
+                placeListEl.querySelector('li[aria-selected="true"]');
+            if (act) setPlace(act.getAttribute("data-value"));
+        }
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!placeListEl.hidden && !e.target.closest("#placePicker")) openPlaces(false);
+    });
+
+    document.getElementById("allDay").addEventListener("change", function () {
+        state.allDay = this.checked;
+        savePrefs();
+        render();
+    });
+
+    document.getElementById("showPast").addEventListener("change", function () {
+        state.showPast = this.checked;
+        render();
+    });
+
+    document.getElementById("themeBtn").addEventListener("click", function () {
+        var cur = document.documentElement.getAttribute("data-theme");
+        applyTheme(cur === "light" ? "dark" : "light");
+        savePrefs();
+    });
+
+    // напоминания: колокольчик, настройки, закрытие по клику вне/по Escape
+    var alertBtn = document.getElementById("alertBtn");
+    var notifyPop = document.getElementById("notifyPop");
+
+    function renderNotifyControls() {
+        var note = "";
+        if (!CAN_NOTIFY) {
+            note = "Системные уведомления недоступны без HTTPS — напоминания показываем на странице.";
+        } else if (Notification.permission === "denied") {
+            note = "Уведомления запрещены в настройках браузера — напоминания показываем на странице.";
+        }
+        document.getElementById("npNote").textContent = note;
+        document.getElementById("npOn").checked = state.notify.on;
+        document.getElementById("npByPlace").checked = state.notify.byPlace;
+        alertBtn.classList.toggle("on", state.notify.on);
+        alertBtn.setAttribute("aria-pressed", String(state.notify.on));
+        var cs = notifyPop.querySelectorAll('[data-role="count"] button');
+        for (var i = 0; i < cs.length; i++) {
+            cs[i].setAttribute("aria-pressed", String(+cs[i].dataset.count === state.notify.count));
+        }
+        var ls = notifyPop.querySelectorAll('[data-role="lead"] button');
+        for (var j = 0; j < ls.length; j++) {
+            ls[j].setAttribute("aria-pressed", String(+ls[j].dataset.lead === state.notify.lead));
+        }
+    }
+
+    function openNotify(open) {
+        notifyPop.hidden = !open;
+        alertBtn.setAttribute("aria-expanded", String(!!open));
+        if (open) renderNotifyControls();
+    }
+
+    alertBtn.addEventListener("click", function () {
+        primeAudio();
+        openNotify(notifyPop.hidden);
+    });
+
+    notifyPop.addEventListener("click", function (e) {
+        var cb = e.target.closest('[data-role="count"] button');
+        if (cb) {
+            state.notify.count = parseInt(cb.dataset.count, 10);
+            savePrefs();
+            renderNotifyControls();
+            render();
+            return;
+        }
+        var lb = e.target.closest('[data-role="lead"] button');
+        if (lb) {
+            state.notify.lead = parseInt(lb.dataset.lead, 10);
+            savePrefs();
+            renderNotifyControls();
+            render();
+        }
+    });
+
+    document.getElementById("npOn").addEventListener("change", function () {
+        state.notify.on = this.checked;
+        if (state.notify.on) {
+            alerted = {};
+            primeAudio();
+            if (CAN_NOTIFY && Notification.permission === "default") {
+                try {
+                    var p = Notification.requestPermission();
+                    if (p && p.then) p.then(renderNotifyControls);
+                } catch (e) { }
+            }
+        }
+        savePrefs();
+        renderNotifyControls();
+        render();
+    });
+
+    document.getElementById("npByPlace").addEventListener("change", function () {
+        state.notify.byPlace = this.checked;
+        savePrefs();
+        render();
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!notifyPop.hidden && !e.target.closest("#notifyPop") &&
+                !e.target.closest("#alertBtn")) {
+            openNotify(false);
+        }
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !notifyPop.hidden) openNotify(false);
+    });
+
+    // нажатие на карточку раскрывает список остановок рейса
+    listEl.addEventListener("click", function (e) {
+        var li = e.target.closest("li.trip");
+        if (li) toggleTrip(li);
+    });
+
+    listEl.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+        var li = e.target.closest("li.trip");
+        if (!li) return;
+        e.preventDefault();
+        toggleTrip(li);
+    });
+
+    renderNotifyControls();
+    render();
+
+    var stamp = nowStamp();
+    setInterval(function () {
+        var d = new Date();
+        document.getElementById("clock").textContent =
+            ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+        if (nowStamp() !== stamp) {   // сменилась минута или сутки
+            stamp = nowStamp();
+            render();
+        } else {
+            tickReminders();          // обновляем «через N мин» и напоминания
+        }
+    }, 20000);
+})();
+    </script>
+</body>
+
+</html>

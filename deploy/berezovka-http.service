@@ -1,0 +1,39 @@
+# /etc/systemd/system/berezovka-http.service
+#
+# Простейший вариант без nginx: python отдаёт папку как статику на порту 8423.
+#
+# Установка:
+#   sudo cp deploy/berezovka-http.service /etc/systemd/system/
+#   sudo mkdir -p /var/www/berezovka
+#   scp index.html data.js user@IP:/var/www/berezovka/
+#   sudo chown -R www-data:www-data /var/www/berezovka
+#   sudo chmod -R a+rX /var/www/berezovka
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now berezovka-http
+#   sudo systemctl status berezovka-http
+#
+# Адрес: http://IP:8423/
+# Логи:  journalctl -u berezovka-http -n 50 --no-pager
+
+[Unit]
+Description=Berezovka bus timetable (static files via python http.server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/berezovka
+ExecStart=/usr/bin/python3 -m http.server 8423 --bind 0.0.0.0 --directory /var/www/berezovka
+Restart=always
+RestartSec=2
+
+# ограничения на всякий случай: серверу нужно только читать папку
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

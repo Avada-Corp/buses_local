@@ -1,0 +1,11 @@
+# Единые переводы строк: файлы сайта должны оставаться LF и на Windows,
+# иначе index.html и _tools/page_script.js разойдутся при checkout.
+* text=auto eol=lf
+
+# бинарное — не трогаем
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.zip binary
+*.docx binary
