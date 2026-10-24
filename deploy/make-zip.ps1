@@ -22,7 +22,7 @@ if (-not $OutFile) { $OutFile = Join-Path $PSScriptRoot "berezovka-site.zip" }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$files = @("index.html", "data.js", "manifest.json", "sw.js", "README.md")
+$files = @("index.html", "data.js", "stats.js", "manifest.json", "sw.js", "README.md")
 $iconsDir = Join-Path $root "icons"
 if (Test-Path $iconsDir) {
     $files += (Get-ChildItem $iconsDir -File | Sort-Object Name | ForEach-Object { "icons/" + $_.Name })

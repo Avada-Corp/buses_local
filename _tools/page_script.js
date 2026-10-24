@@ -28,6 +28,45 @@
         });
     })();
 
+    /* ---------- статистика (необязательно, настройки в stats.js) ---------- */
+    (function initStats() {
+        var cfg = window.STATS || {};
+        if (!cfg.goatcounter && !cfg.yandex) return;   // выключено — ни одного запроса
+
+        if (cfg.goatcounter) {
+            var gc = document.createElement("script");
+            gc.async = true;
+            gc.src = "https://gc.zgo.at/count.js";
+            gc.setAttribute("data-goatcounter",
+                "https://" + cfg.goatcounter + ".goatcounter.com/count");
+            document.head.appendChild(gc);
+        }
+
+        if (cfg.yandex) {
+            (function (w, d, src) {   // стандартная заглушка счётчика Метрики
+                w.ym = w.ym || function () { (w.ym.a = w.ym.a || []).push(arguments); };
+                w.ym.l = 1 * new Date();
+                var s = d.createElement("script");
+                s.async = 1;
+                s.src = src;
+                d.head.appendChild(s);
+            })(window, document, "https://mc.yandex.ru/metrika/tag.js");
+            window.ym(cfg.yandex, "init", {
+                clickmap: true, trackLinks: true, accurateTrackBounce: true, webvisor: false
+            });
+        }
+
+        // отдельная метрика «поставили приложение» — видно эффект от PWA
+        window.addEventListener("appinstalled", function () {
+            if (window.goatcounter && window.goatcounter.count) {
+                window.goatcounter.count({
+                    path: "install", title: "Установка приложения", event: true
+                });
+            }
+            if (cfg.yandex && window.ym) window.ym(cfg.yandex, "reachGoal", "install");
+        });
+    })();
+
     var state = {
         dir: "out",
         day: "auto",      // "auto" | 0..6 (Monday based)

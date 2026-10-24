@@ -9,7 +9,7 @@
 
 "use strict";
 
-var VERSION = "v1";
+var VERSION = "v2";
 var CACHE = "berezovka-" + VERSION;
 
 var SCOPE = self.registration.scope;   // абсолютный URL папки со sw.js
@@ -19,6 +19,7 @@ var PRECACHE = [
     "./",
     "./index.html",
     "./data.js",
+    "./stats.js",
     "./manifest.json",
     "./icons/icon-192.png",
     "./icons/icon-512.png",
@@ -26,9 +27,14 @@ var PRECACHE = [
     "./icons/apple-touch-icon.png"
 ];
 
-var DATA_URL = new URL("./data.js", SCOPE).href;
 var INDEX_URL = new URL("./index.html", SCOPE).href;
-var MANIFEST_URL = new URL("./manifest.json", SCOPE).href;
+
+// для этих файлов сначала пробуем сеть (свежесть важнее скорости)
+var NETWORK_FIRST = [
+    new URL("./data.js", SCOPE).pathname,
+    new URL("./stats.js", SCOPE).pathname,
+    new URL("./manifest.json", SCOPE).pathname
+];
 
 /* ---------- установка / активация ---------- */
 
@@ -95,10 +101,8 @@ self.addEventListener("fetch", function (event) {
     if (url.origin !== self.location.origin) return;   // чужие домены не трогаем
 
     var p = url.pathname;
-    // страница, манифест и данные — всегда пробуем сеть
-    if (request.mode === "navigate" ||
-            p === new URL(DATA_URL).pathname ||
-            p === new URL(MANIFEST_URL).pathname) {
+    // страница, манифест, данные и настройки статистики — всегда пробуем сеть
+    if (request.mode === "navigate" || NETWORK_FIRST.indexOf(p) >= 0) {
         event.respondWith(networkFirst(request));
         return;
     }
