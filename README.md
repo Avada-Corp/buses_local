@@ -75,15 +75,23 @@ node _tools/check_pwa.js       # манифест, service worker, офлайн 
 
 Данные берутся с [ticketbus.by](https://ticketbus.by/) (официальная продажа билетов по Беларуси).
 
-**Автоматически (GitHub Actions).** Если репозиторий опубликован на GitHub Pages вместе
-с `_tools/` (вариант 3 в [deploy/GITHUB-PAGES.md](deploy/GITHUB-PAGES.md)), то
-`.github/workflows/update-schedule.yml` каждый день в 06:00 по Минску сам скачивает табло,
-собирает и проверяет `data.js` и коммитит его **только если расписание реально изменилось**
-(метка времени сбора в расчёт не идёт). Запустить вручную: вкладка *Actions* →
-«Обновление расписания» → *Run workflow*. Если сборка упала, GitHub пришлёт письмо,
-а скачанные данные сохранятся в артефакте запуска.
+**Автоматически (планировщик Windows).** `ticketbus.by` пускает только белорусские
+адреса: с раннеров GitHub (Azure, США/ЕС) и ещё из 13 проверенных стран — таймаут
+соединения. Поэтому GitHub Actions не подходит, и обновление выполняется на этом
+компьютере. Один раз:
 
-**Вручную, локально:**
+```powershell
+powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1
+# по умолчанию каждый день в 09:00; другое время: -At "07:30"; удалить: -Remove
+```
+
+Дальше задача `BusesScheduleUpdate` ежедневно запускает `_tools/update-local.ps1`:
+скачивает табло (до 3 попыток), собирает и проверяет `data.js` и коммитит/пушит его
+**только если расписание реально изменилось** (метка времени сбора в расчёт не идёт).
+Если компьютер был выключен в 09:00 — задача выполнится при следующем включении.
+Подробности каждого запуска — в `_tools/update-local.log`.
+
+**Вручную, локально** (или двойной щелчок по `_tools\update-local.cmd`):
 
 ```sh
 node _tools/scrape_ticketbus.js     # скачивает табло Берёзовки и схемы всех рейсов -> _tools/live/
@@ -126,7 +134,9 @@ ssh user@IP 'cd /var/www/berezovka && nohup python3 -m http.server 8423 --bind 0
 | `sw.js` | service worker: офлайн-кэш, клик по уведомлению |
 | `icons/` | иконки приложения (192/512, maskable, apple-touch, badge) |
 | `stats.js` | настройки статистики (GoatCounter / Яндекс.Метрика); пусто = выключено |
-| `.github/workflows/update-schedule.yml` | ежедневное автообновление `data.js` через GitHub Actions |
+| `_tools/update-local.ps1` | скачать → собрать → проверить → закоммитить и запушить `data.js` |
+| `_tools/update-local.cmd` | ручной запуск обновления двойным щелчком |
+| `_tools/register-task.ps1` | ежедневная задача обновления в планировщике Windows |
 | `.nojekyll` | пустой файл для GitHub Pages (отключает сборку Jekyll) |
 | `.gitignore`, `.gitattributes` | что не коммитить (сырые данные, скриншоты, архив) и LF-переводы строк |
 | `_tools/scrape_ticketbus.js` | загрузка данных с ticketbus.by |
