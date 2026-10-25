@@ -142,6 +142,7 @@ ssh user@IP 'cd /var/www/berezovka && nohup python3 -m http.server 8423 --bind 0
 | `_tools/scrape_ticketbus.js` | загрузка данных с ticketbus.by |
 | `_tools/build_live_data.js` | сборка `data.js` из `_tools/live/board.json` |
 | `_tools/check_data.js` | проверка `data.js` (время, дни, остановки, дубликаты) |
+| `_tools/data_changed.js` | сравнение `data.js` с версией в репозитории без метки времени сбора |
 | `_tools/page_script.js` | исходник скрипта страницы (вставляется в `index.html`) |
 | `_tools/make_icons.js` | перерисовка иконок в `icons/` (headless Chrome) |
 | `_tools/check_pwa.js` | автотест PWA: манифест, service worker, офлайн |

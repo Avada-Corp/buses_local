@@ -34,6 +34,10 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $LogFile = Join-Path $PSScriptRoot "update-local.log"
 $DataFile = Join-Path $Root "data.js"
+$DataChanged = Join-Path $PSScriptRoot "data_changed.js"
+
+# Без этого в скрытой задаче русский вывод node/git может прийти в OEM-кодировке.
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { }
 
 function Write-Log {
     param([string]$Message)
@@ -42,11 +46,44 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
-function Invoke-NodeScript {
-    param([string]$Script, [string]$Title)
+# Запуск внешней программы: stderr пишется в файл, поэтому PowerShell 5.1
+# не превращает сообщения git/node в исключения (иначе успешный push
+# выглядел бы как ошибка). Возвращает код возврата и строки stdout.
+function Invoke-Native {
+    param(
+        [string]$Title,
+        [string]$FilePath,
+        [string[]]$Arguments = @(),
+        [switch]$Quiet
+    )
     Write-Log $Title
-    & node $Script 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
-    return $LASTEXITCODE
+    $errFile = [System.IO.Path]::GetTempFileName()
+    $out = @()
+    $code = -1
+    $prevEap = $ErrorActionPreference
+
+    try {
+        # PowerShell 5.1 считает любой stderr внешней программы ошибкой.
+        # На время вызова отключаем Stop, код возврата проверяем сами.
+        $ErrorActionPreference = "Continue"
+        $out = @(& $FilePath @Arguments 2> $errFile)
+        $code = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $prevEap
+    }
+
+    if (-not $Quiet) {
+        $out | ForEach-Object { Write-Log ("  " + $_) }
+    }
+
+    $err = @(Get-Content $errFile -Encoding UTF8 -ErrorAction SilentlyContinue)
+    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+    if ($err.Count -gt 0) {
+        $err | ForEach-Object { Write-Log ("  " + $_) }
+    }
+
+    return [pscustomobject]@{ Code = $code; Output = $out }
 }
 
 # лог не должен расти бесконечно
@@ -60,25 +97,23 @@ try {
 
     # 1. Синхронизация с GitHub, чтобы не коммитить поверх чужих правок.
     #    Если в проекте есть незакоммиченные изменения — не трогаем их.
-    $dirty = @(git status --porcelain)
-    if ($dirty.Count -gt 0) {
+    $status = Invoke-Native "проверяю рабочую копию" "git" @("status", "--porcelain") -Quiet
+    if ($status.Code -ne 0) { throw "git status завершился с кодом $($status.Code)" }
+
+    if ($status.Output.Count -gt 0) {
         Write-Log "в проекте есть незакоммиченные изменения — git pull пропущен"
     }
     else {
-        Write-Log "git pull --ff-only"
-        & git pull --ff-only --quiet 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
-        if ($LASTEXITCODE -ne 0) {
-            throw "не удалось обновить репозиторий (git pull, код $LASTEXITCODE)"
-        }
+        $pull = Invoke-Native "git pull --ff-only" "git" @("pull", "--ff-only", "--quiet")
+        if ($pull.Code -ne 0) { throw "не удалось обновить репозиторий (git pull, код $($pull.Code))" }
     }
 
     # 2. Табло с ticketbus.by — с повторами: сайт иногда отвечает медленно.
     $scraped = $false
     for ($i = 1; $i -le $Attempts; $i++) {
-        $code = Invoke-NodeScript (Join-Path $PSScriptRoot "scrape_ticketbus.js") `
-            "скачиваю табло (попытка $i из $Attempts)"
-        if ($code -eq 0) { $scraped = $true; break }
-        Write-Log "попытка $i не удалась (код $code)"
+        $r = Invoke-Native "скачиваю табло (попытка $i из $Attempts)" "node" @((Join-Path $PSScriptRoot "scrape_ticketbus.js"))
+        if ($r.Code -eq 0) { $scraped = $true; break }
+        Write-Log "попытка $i не удалась (код $($r.Code))"
         if ($i -lt $Attempts) {
             Write-Log "жду 60 секунд"
             Start-Sleep -Seconds 60
@@ -87,20 +122,22 @@ try {
     if (-not $scraped) { throw "не удалось скачать табло с ticketbus.by" }
 
     # 3. Сборка и проверка.
-    $code = Invoke-NodeScript (Join-Path $PSScriptRoot "build_live_data.js") "собираю data.js"
-    if ($code -ne 0) { throw "сборка data.js завершилась с кодом $code" }
+    $build = Invoke-Native "собираю data.js" "node" @((Join-Path $PSScriptRoot "build_live_data.js"))
+    if ($build.Code -ne 0) { throw "сборка data.js завершилась с кодом $($build.Code)" }
 
-    $code = Invoke-NodeScript (Join-Path $PSScriptRoot "check_data.js") "проверяю данные"
-    if ($code -ne 0) { throw "проверка data.js не пройдена (код $code)" }
+    $check = Invoke-Native "проверяю данные" "node" @((Join-Path $PSScriptRoot "check_data.js"))
+    if ($check.Code -ne 0) { throw "проверка data.js не пройдена (код $($check.Code))" }
 
-    # 4. Сравнение с версией в репозитории без метки времени сбора,
-    #    иначе каждый день получался бы пустой коммит.
-    $old = (git show HEAD:data.js) -join "`n"
-    $new = Get-Content $DataFile -Raw -Encoding UTF8
-    $pattern = '"updated":"[^"]*"'
-    $changed = (($old -replace $pattern, '"updated":""') -ne ($new -replace $pattern, '"updated":""'))
+    # 4. Сравнение с версией в репозитории без метки времени сбора.
+    $diff = Invoke-Native "сравниваю расписание с версией в репозитории" "node" @($DataChanged, "--head", $DataFile)
+    if ($diff.Code -eq 2) { throw "не удалось сравнить data.js" }
+    $changed = ($diff.Code -eq 1)
 
     if (-not $changed) {
+        # Пересборка всегда меняет метку времени сбора — возвращаем файл,
+        # чтобы рабочая копия оставалась чистой и следующий запуск сделал git pull.
+        $restore = Invoke-Native "возвращаю data.js (изменилась только метка сбора)" "git" @("checkout", "--", "data.js")
+        if ($restore.Code -ne 0) { throw "не удалось вернуть data.js (код $($restore.Code))" }
         Write-Log "расписание не изменилось — коммита не будет"
         Write-Log "=== готово ==="
         exit 0
@@ -109,7 +146,8 @@ try {
     if ($DryRun) {
         $preview = Join-Path $PSScriptRoot "live\data.js"
         Copy-Item $DataFile $preview -Force
-        & git checkout -- data.js 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
+        $restore = Invoke-Native "возвращаю data.js в исходное состояние" "git" @("checkout", "--", "data.js")
+        if ($restore.Code -ne 0) { throw "не удалось вернуть data.js (код $($restore.Code))" }
         Write-Log "расписание изменилось (dry-run: без коммита)"
         Write-Log "новый data.js сохранён: $preview"
         Write-Log "=== готово ==="
@@ -117,13 +155,15 @@ try {
     }
 
     # 5. Коммит и пуш.
-    $stamp = Get-Date -Format "dd.MM.yyyy HH:mm"
-    & git add data.js 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
-    & git commit -m "расписание: $stamp" 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
-    if ($LASTEXITCODE -ne 0) { throw "git commit завершился с кодом $LASTEXITCODE" }
+    $add = Invoke-Native "git add data.js" "git" @("add", "data.js")
+    if ($add.Code -ne 0) { throw "git add завершился с кодом $($add.Code)" }
 
-    & git push origin HEAD 2>&1 | ForEach-Object { Write-Log ("  " + $_) }
-    if ($LASTEXITCODE -ne 0) { throw "git push завершился с кодом $LASTEXITCODE" }
+    $stamp = Get-Date -Format "dd.MM.yyyy HH:mm"
+    $commit = Invoke-Native "git commit" "git" @("commit", "-m", "расписание: $stamp")
+    if ($commit.Code -ne 0) { throw "git commit завершился с кодом $($commit.Code)" }
+
+    $push = Invoke-Native "git push" "git" @("push", "--quiet", "origin", "HEAD")
+    if ($push.Code -ne 0) { throw "git push завершился с кодом $($push.Code)" }
 
     Write-Log "data.js обновлён и отправлен на GitHub"
     Write-Log "=== готово ==="
