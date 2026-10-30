@@ -147,7 +147,8 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "07:30"
 Что делает задача `BusesScheduleUpdate` (ежедневно, по умолчанию в 09:00):
 
 1. `git pull --ff-only` — если в проекте нет незакоммиченных изменений;
-2. `node _tools/scrape_ticketbus.js` — до 3 попыток с паузой 60 секунд;
+2. `node _tools/scrape_ticketbus.js` — до 3 попыток с паузой 60 секунд (междугородное
+   табло, схемы остановок и пригородная таблица `fload.php`);
 3. `node _tools/build_live_data.js` — новый `data.js`;
 4. `node _tools/check_data.js` — при ошибке пуш не выполняется, старые данные остаются;
 5. если расписание реально изменилось (метка времени сбора не в счёт) —

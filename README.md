@@ -74,6 +74,10 @@ node _tools/check_pwa.js       # манифест, service worker, офлайн 
 ## Как обновить расписание
 
 Данные берутся с [ticketbus.by](https://ticketbus.by/) (официальная продажа билетов по Беларуси).
+Скрейпер читает два источника: междугородное табло станции (`prog=raspis2`) со схемами
+остановок и пригородную таблицу `fload.php` — в ней есть рейсы, которые начинаются
+в Берёзовке (например, `БЕРЕЗОВКА АК-ЛИДА АВ`, 10:40 → 11:20), но отсутствуют на
+междугородном табло.
 
 **Автоматически (планировщик Windows).** `ticketbus.by` пускает только белорусские
 адреса: с раннеров GitHub (Azure, США/ЕС) и ещё из 13 проверенных стран — таймаут
@@ -94,7 +98,7 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1
 **Вручную, локально** (или двойной щелчок по `_tools\update-local.cmd`):
 
 ```sh
-node _tools/scrape_ticketbus.js     # скачивает табло Берёзовки и схемы всех рейсов -> _tools/live/
+node _tools/scrape_ticketbus.js     # табло Берёзовки (междугородное + пригород) и схемы рейсов -> _tools/live/
 node _tools/build_live_data.js      # собирает data.js для страницы
 node _tools/check_data.js           # проверяет структуру данных (должно быть «проверки пройдены ✔»)
 node _tools/check_pwa.js            # необязательно: манифест, service worker, офлайн-режим
@@ -139,7 +143,7 @@ ssh user@IP 'cd /var/www/berezovka && nohup python3 -m http.server 8423 --bind 0
 | `_tools/register-task.ps1` | ежедневная задача обновления в планировщике Windows |
 | `.nojekyll` | пустой файл для GitHub Pages (отключает сборку Jekyll) |
 | `.gitignore`, `.gitattributes` | что не коммитить (сырые данные, скриншоты, архив) и LF-переводы строк |
-| `_tools/scrape_ticketbus.js` | загрузка данных с ticketbus.by |
+| `_tools/scrape_ticketbus.js` | загрузка данных с ticketbus.by (междугородное табло + пригород) |
 | `_tools/build_live_data.js` | сборка `data.js` из `_tools/live/board.json` |
 | `_tools/check_data.js` | проверка `data.js` (время, дни, остановки, дубликаты) |
 | `_tools/data_changed.js` | сравнение `data.js` с версией в репозитории без метки времени сбора |
