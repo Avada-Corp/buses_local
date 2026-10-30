@@ -140,11 +140,12 @@ GitHub Actions для этого не подходит: `ticketbus.by` (134.17.9
 cd E:\projects\berezovka\buses
 git pull
 powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1
-# другое время запуска:
-powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "07:30"
+# по умолчанию дважды в день: в 12:00 и 19:00
+# другое время запуска — одно или несколько через запятую:
+powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "08:00,20:30"
 ```
 
-Что делает задача `BusesScheduleUpdate` (ежедневно, по умолчанию в 09:00):
+Что делает задача `BusesScheduleUpdate` (дважды в день, в 12:00 и 19:00):
 
 1. `git pull --ff-only` — если в проекте нет незакоммиченных изменений;
 2. `node _tools/scrape_ticketbus.js` — до 3 попыток с паузой 60 секунд (междугородное
@@ -152,17 +153,18 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "07:30"
 3. `node _tools/build_live_data.js` — новый `data.js`;
 4. `node _tools/check_data.js` — при ошибке пуш не выполняется, старые данные остаются;
 5. если расписание реально изменилось (метка времени сбора не в счёт) —
-   коммит «расписание: 25.10.2026 09:00» и `git push`; Pages пересобирается сам.
+   коммит «расписание: 25.10.2026 12:00» и `git push`; Pages пересобирается сам.
 
 Полезно знать:
 
-- **ПК был выключен** в 09:00 — задача выполнится при следующем включении. Пока ПК
-  выключен, на сайте остаются последние загруженные данные.
+- **ПК был выключен** в 12:00 или 19:00 — задача выполнится при следующем включении.
+  Пока ПК выключен, на сайте остаются последние загруженные данные.
 - **Лог:** `_tools/update-local.log` — время, вывод всех шагов, ошибки.
 - **Проверить, не меняя ничего:** `powershell -ExecutionPolicy Bypass -File _tools\update-local.ps1 -DryRun`
   (собранный файл сохраняется в `_tools/live/data.js` для просмотра).
 - **Обновить сейчас:** двойной щелчок по `_tools\update-local.cmd`.
-- **Другое время:** перезапустить `register-task.ps1 -At "HH:mm"` — задача перезапишется.
+- **Другое время:** перезапустить `register-task.ps1 -At "HH:mm"` (можно несколько
+  через запятую: `-At "12:00,19:00"`) — задача перезапишется.
 - **Удалить:** `register-task.ps1 -Remove`.
 - **Перенесли проект в другую папку** — перерегистрируйте задачу: в ней записан полный путь.
 - **`git push` без пароля** работает через Git Credential Manager (уже настроен), задача

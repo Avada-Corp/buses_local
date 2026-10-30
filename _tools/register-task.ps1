@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Регистрирует ежедневное обновление расписания в планировщике задач Windows.
+    Регистрирует автоматическое обновление расписания в планировщике задач Windows.
 
 .DESCRIPTION
     Создаёт задачу BusesScheduleUpdate, которая запускает _tools\update-local.ps1.
@@ -11,7 +11,7 @@
     следующем включении (StartWhenAvailable).
 
 .PARAMETER At
-    Время ежедневного запуска, по умолчанию 09:00.
+    Время запуска, можно несколько через запятую. По умолчанию 12:00 и 19:00.
 
 .PARAMETER TaskName
     Имя задачи в планировщике.
@@ -20,13 +20,16 @@
     Удалить задачу вместо создания.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "07:30"
+    powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "08:00,20:30"
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -Remove
 #>
 param(
-    [string]$At = "09:00",
+    [string[]]$At = @("12:00", "19:00"),
     [string]$TaskName = "BusesScheduleUpdate",
     [switch]$Remove
 )
@@ -44,12 +47,25 @@ if ($Remove) {
 
 if (-not (Test-Path $Script)) { throw "не найден $Script" }
 
+# «12:00,19:00» и «12:00», «19:00» должны работать одинаково.
+$times = @($At |
+    ForEach-Object { $_ -split "," } |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ } |
+    Select-Object -Unique)
+if (-not $times.Count) { throw "не задано время запуска" }
+foreach ($t in $times) {
+    if ($t -notmatch '^([01]\d|2[0-3]):[0-5]\d$') {
+        throw "неверное время «$t»: нужно HH:mm, например 12:00"
+    }
+}
+
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $Script) `
     -WorkingDirectory $Root
 
-$trigger = New-ScheduledTaskTrigger -Daily -At $At
+$triggers = @($times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
 
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
@@ -61,7 +77,7 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger $triggers `
     -Settings $settings `
     -Description "Обновление расписания Берёзовки с ticketbus.by и пуш data.js на GitHub Pages" `
     -Force | Out-Null
@@ -69,7 +85,7 @@ Register-ScheduledTask `
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
 
 Write-Host "Задача «$TaskName» создана."
-Write-Host "Запуск: ежедневно в $At (если ПК был выключен — при следующем включении)."
+Write-Host ("Запуск: ежедневно в " + ($times -join " и ") + " (если ПК был выключен — при следующем включении).")
 Write-Host "Следующий запуск: $($info.NextRunTime)"
 Write-Host "Скачать и обновить прямо сейчас: _tools\update-local.cmd"
 Write-Host "Лог: $(Join-Path $PSScriptRoot 'update-local.log')"
