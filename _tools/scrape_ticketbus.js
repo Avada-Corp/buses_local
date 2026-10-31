@@ -10,20 +10,24 @@
 //
 // Что делает:
 //   1) GET  /                                  -> берём PHPSESSID из HTML
-//   2) POST getdata.php?prog=raspis2&host=1    -> все междугородные рейсы через станцию
+//   2) POST getdata.php?prog=raspis2&host=1    -> междугородные рейсы через станцию
 //   3) POST getdata.php?prog=getstation2       -> схема остановок каждого рейса
-//   4) GET  /fload.php?id=<station>&sys=BJ     -> пригородные рейсы (их нет в raspis2)
-//   5) пишет _tools/live/board.html, _tools/live/scheme-<код>.html и board.json
+//   4) GET  /fload.php?id=<station>&sys=BJ     -> прямые рейсы из Берёзовки
+//   5) POST prog=raspis2 для города назначения -> актуальные пригородные рейсы
+//   6) пишет _tools/live/board.html, scheme-<код>.html, origin-<id>.html, board.json
 //
-// Почему отдельно fload.php: табло raspis2 отдаёт только «МЕЖДУГОРОДНЫЙ».
-// Пригородные рейсы (например, БЕРЁЗОВКА АК-ЛИДА АВ) видны только на странице
-// табло станции, во второй таблице «ПРИГОРОДНЫЙ». Схемы остановок для них
-// getstation2 не отдаёт (внутренняя ошибка сайта), поэтому для таких рейсов
-// строим две остановки: наша станция и конечный пункт из названия маршрута.
+// Почему так: табло raspis2 НЕ показывает рейсы, которые начинаются в Берёзовке.
+// Они есть только на странице табло станции fload.php в двух таблицах:
+// t0 — пригородные (Лида), t1 — междугородные (Минск). Причём времена в t0
+// устаревают: на 30.10.2026 не было 08:25 и 12:30, а 18:10 указан как 18:30.
+// Поэтому для пригородных рейсов времена, дни и схемы остановок берём с табло
+// города назначения, а t0/t1 используем как список направлений и как запасной
+// источник, если табло города недоступно.
 //
 // board.json — по одной записи на рейс:
 //   { code, route, note, daysRaw, dir, at, t, a, from, to,
 //     stops: [{ n, km, dep, arr, addr }], reach: ["..."] }
+// и warnings — то, что не удалось прочитать надёжно (см. конец main()).
 
 const https = require("https");
 const fs = require("fs");
@@ -110,15 +114,16 @@ function parseScheme(html) {
   return stops;
 }
 
-// Пригородная таблица fload.php. В исходном HTML кириллическая «Р» заменена
-// латинской «P» (для шрифта табло), например «БЕPЕЗОВКА АК-ЛИДА АВ» —
-// возвращаем буквы на место, иначе не сработают сравнения и разбор дней.
+// В таблицах fload.php кириллическая «Р» заменена латинской «P» (для шрифта
+// табло), например «БЕPЕЗОВКА АК-ЛИДА АВ» — возвращаем буквы на место, иначе
+// не сработают сравнения, разбор дней и названий.
 const fixCyrillic = (s) => String(s || "").replace(/P/g, "Р").replace(/p/g, "р");
 
-// Ячейки строки пригорода (разделители — <th>, поэтому в строке 7 <td>):
+// Ячейки строки (разделители — <th>, поэтому в строке 7 <td>):
 //   № | маршрут | дни | отпр. с Берёзовки | приб. конечн. | отпр. конечн. | приб. Берёзовка
-function parseSuburban(html) {
-  const table = (/<table[^>]*id=['"]t0['"][^>]*>([\s\S]*?)<\/table>/i.exec(html) || [, ""])[1];
+function parseFloadTable(html, id, note) {
+  const re = new RegExp("<table[^>]*id=['\"]" + id + "['\"][^>]*>([\\s\\S]*?)<\\/table>", "i");
+  const table = (re.exec(html) || [, ""])[1];
   const rows = [...table.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((m) => m[1]);
   const runs = [];
   for (const raw of rows) {
@@ -130,13 +135,47 @@ function parseSuburban(html) {
     const t = c[3];
     const a = c[4];
     if (!/^\d{2}:\d{2}$/.test(t) || !/^\d{2}:\d{2}$/.test(a)) continue;
-    runs.push({ route, to: m[1].trim(), daysRaw: c[2], t, a });
+    runs.push({ route, to: m[1].trim(), daysRaw: c[2], t, a, note: note || "" });
   }
   return runs;
 }
 
+// t0 — пригородные, t1 — междугородные прямые рейсы из Берёзовки.
+const parseSuburban = (html) => parseFloadTable(html, "t0", "");
+const parseIntercity = (html) => parseFloadTable(html, "t1", "продажа только в автобусе");
+
 // \b в JS работает только по ASCII, поэтому границу слова проверяем явно
 const isStation = (name) => /^БЕР[ЁЕ]ЗОВКА(\s|$)/.test(name);
+
+// «БЕРЕЗОВКА АК-ЛИДА АВ / примечание» -> «БЕРЕЗОВКА АК-ЛИДА АВ»
+const routeName = (route) => String(route || "").split(/\s*\/\s*/)[0].trim();
+
+// «ЛИДА АВ» -> «ЛИДА»: в getcity названия без типа станции.
+const cityBase = (name) => String(name || "").replace(/\s+(АВ|АК|АС)$/i, "").trim().toUpperCase();
+
+// Название маршрута -> пункт назначения: «БЕРЕЗОВКА АК-ЛИДА АВ» -> «ЛИДА АВ».
+function destinationOf(route) {
+  const m = /^БЕР[ЁЕ]ЗОВКА\s*АК\s*-\s*(.+)$/i.exec(routeName(route));
+  return m ? m[1].trim() : "";
+}
+
+// Список городов из формы поиска: <option value='409001' >ЛИДА</option>
+async function getCities(api) {
+  const html = await request(api + "&prog=getcity", "prog=getcity");
+  return [...html.matchAll(/<option value='(\d+)' >([^<]+)<\/option>/g)]
+    .map((m) => ({ id: m[1], name: m[2].trim() }));
+}
+
+function findCity(cities, name) {
+  const want = cityBase(name);
+  if (!want) return null;
+  return (
+    cities.find((c) => cityBase(c.name) === want) ||
+    cities.find((c) => cityBase(c.name).indexOf(want + " ") === 0) ||
+    cities.find((c) => want.indexOf(cityBase(c.name) + " ") === 0) ||
+    null
+  );
+}
 
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -192,7 +231,7 @@ async function main() {
   }
   process.stdout.write("\n");
 
-  // Пригородные рейсы: в raspis2 их нет, забираем со страницы табло станции.
+  // ---------- рейсы, которые начинаются в Берёзовке ----------
   const stopAddr = new Map();
   runs.forEach((r) => r.stops.forEach((s) => {
     if (!stopAddr.has(s.n)) stopAddr.set(s.n, s.addr || "");
@@ -208,37 +247,138 @@ async function main() {
     "GET"
   );
   fs.writeFileSync(path.join(OUT_DIR, "suburban.html"), suburbanHtml, "utf8");
-  // Если таблицы нет, лучше упасть с ошибкой: иначе рейсы молча исчезнут
-  // из data.js и сборка закоммитит их удаление.
+  // Без таблицы не узнаем пригородные направления — лучше упасть, чем молча
+  // потерять все рейсы, начинающиеся в Берёзовке.
   if (!/id=['"]t0['"]/i.test(suburbanHtml)) {
     throw new Error("в fload.php нет пригородной таблицы — изменился формат ответа");
   }
   const suburban = parseSuburban(suburbanHtml);
+  const intercity = parseIntercity(suburbanHtml);
+  console.log(
+    "прямых рейсов в fload.php: пригородных", suburban.length,
+    "| междугородных", intercity.length
+  );
 
-  let suburbanAdded = 0;
-  for (const s of suburban) {
-    // Если такой рейс уже пришёл из междугородного табло — не дублируем.
-    if (runs.some((r) => r.dir === "out" && r.route === s.route && r.t === s.t && r.a === s.a)) continue;
+  const warnings = [];
+  const cities = await getCities(api);
+  const origin = [];
+
+  // Строки t0 и t1 — это рейсы, которые начинаются в Берёзовке.
+  const sourceRows = [];
+  suburban.forEach((s) => sourceRows.push(Object.assign({ src: "t0" }, s)));
+  intercity.forEach((s) => sourceRows.push(Object.assign({ src: "t1" }, s)));
+
+  const resolved = new Map(); // пункт назначения -> удалось ли прочитать табло города
+  const dests = [];
+  for (const s of sourceRows) {
+    if (dests.indexOf(s.to) < 0) dests.push(s.to);
+  }
+
+  // Версия расписания в коде: «…~20260812» (чем позже, тем новее).
+  const codeDate = (code) => {
+    const m = /~(\d{8})$/.exec(code || "");
+    return m ? Number(m[1]) : 0;
+  };
+
+  for (const dest of dests) {
+    const city = findCity(cities, dest);
+    if (!city) {
+      // Например, Минска нет в списке городов поиска — это нормально,
+      // для таких направлений времена берём из fload.php.
+      console.log("  " + dest + ": табло города недоступно — данные из fload.php");
+      resolved.set(dest, false);
+      continue;
+    }
+
+    const destHtml = await request(
+      api + "&prog=raspis2&host=1",
+      "station_id=" + city.id + "&station_id1=&path=0"
+    );
+    fs.writeFileSync(path.join(OUT_DIR, "origin-" + city.id + ".html"), destHtml, "utf8");
+
+    // На табло бывают две версии одного рейса (старая и новая) — берём новейшую.
+    const byRouteDep = new Map();
+    parseBoard(destHtml)
+      .filter((r) => /^БЕР[ЁЕ]ЗОВКА\s*АК/i.test(routeName(r.route)))
+      .forEach((row) => {
+        const dep = (String(row.period || "").split("/")[0] || "").trim();
+        const key = routeName(row.route) + "|" + dep;
+        const prev = byRouteDep.get(key);
+        if (!prev || codeDate(row.code) > codeDate(prev.code)) byRouteDep.set(key, row);
+      });
+    const rows = [...byRouteDep.values()];
+
+    if (!rows.length) {
+      warnings.push("на табло «" + city.name + "» нет рейсов из Берёзовки");
+      resolved.set(dest, false);
+      continue;
+    }
+    resolved.set(dest, true);
+
+    let added = 0;
+    for (const row of rows) {
+      const period = /^(\d{2}:\d{2})\s*\/\s*(\d{2}:\d{2})/.exec(row.period || "");
+      if (!period) {
+        warnings.push("непонятное время рейса " + routeName(row.route) + " «" + row.period + "»");
+        continue;
+      }
+      const t = period[1];
+      const a = period[2];
+
+      // Схема остановок: по коду с табло города getstation2 работает.
+      const schemeHtml = await request(
+        api + "&prog=getstation2",
+        "station_id=" + encodeURIComponent(row.code)
+      );
+      fs.writeFileSync(
+        path.join(OUT_DIR, "scheme-" + row.code.replace(/[^\w.~-]/g, "_") + ".html"),
+        schemeHtml,
+        "utf8"
+      );
+      let stops = parseScheme(schemeHtml);
+
+      if (!stops.length || !isStation(stops[0].n)) {
+        warnings.push("нет схемы для " + routeName(row.route) + " " + row.period + " — только две остановки");
+        stops = [
+          { n: hereName, km: 0, dep: t, arr: "", addr: stopAddr.get(hereName) || "" },
+          { n: dest, km: 0, dep: "", arr: a, addr: stopAddr.get(dest) || "" },
+        ];
+      }
+
+      origin.push({
+        code: row.code,
+        route: routeName(row.route),
+        note: row.note,
+        daysRaw: row.daysRaw,
+        dir: "out",
+        at: 0,
+        t: stops[0].dep || t,
+        a: stops[stops.length - 1].arr || stops[stops.length - 1].dep || a,
+        from: stops[0].n,
+        to: stops[stops.length - 1].n,
+        stops,
+        reach: stops.slice(1).map((s) => s.n),
+        period: row.period,
+      });
+      added++;
+    }
+    console.log("  " + city.name + ": рейсов из Берёзовки " + added);
+  }
+
+  // Для направлений без табло города (Минск) берём строки fload.php как есть:
+  // времена и дни из таблицы, остановки — Берёзовка и конечная.
+  let fallbackAdded = 0;
+  for (const s of sourceRows) {
+    if (resolved.get(s.to) !== false) continue;
+    if (origin.some((r) => routeName(r.route) === s.route && r.t === s.t && r.a === s.a)) continue;
     const stops = [
-      {
-        n: hereName,
-        km: 0,
-        dep: s.t,
-        arr: "",
-        addr: stopAddr.get(hereName) || "",
-      },
-      {
-        n: s.to,
-        km: 0,
-        dep: "",
-        arr: s.a,
-        addr: stopAddr.get(s.to) || "",
-      },
+      { n: hereName, km: 0, dep: s.t, arr: "", addr: stopAddr.get(hereName) || "" },
+      { n: s.to, km: 0, dep: "", arr: s.a, addr: stopAddr.get(s.to) || "" },
     ];
-    runs.push({
+    origin.push({
       code: "",
       route: s.route,
-      note: "",
+      note: s.note || "",
       daysRaw: s.daysRaw,
       dir: "out",
       at: 0,
@@ -250,21 +390,54 @@ async function main() {
       reach: [s.to],
       period: s.t + "/" + s.a,
     });
-    suburbanAdded++;
+    fallbackAdded++;
   }
-  console.log("пригородных рейсов:", suburban.length, "| добавлено:", suburbanAdded);
+  if (fallbackAdded) console.log("из fload.php добавлено (табло города недоступно):", fallbackAdded);
+
+  // fload.php устаревает: если он показывает время, которого нет на табло
+  // города, это повод проверить сайт (см. _tools/divergence.txt).
+  for (const dest of dests) {
+    if (resolved.get(dest) !== true) continue;
+    const boardTimes = new Set(
+      origin
+        .filter((r) => cityBase(destinationOf(r.route)) === cityBase(dest))
+        .map((r) => r.t)
+    );
+    sourceRows.filter((s) => s.to === dest).forEach((s) => {
+      if (!boardTimes.has(s.t)) {
+        warnings.push(
+          "fload.php показывает " + s.t + " -> " + s.a + " (" + dest +
+          "), а на табло города этого рейса нет"
+        );
+      }
+    });
+  }
+
+  // Не дублируем рейсы, которые уже пришли с междугородного табло станции.
+  const runSig = (r) => [r.dir, routeName(r.route), r.t, r.a].join("|");
+  const known = new Set(runs.map(runSig));
+  let originAdded = 0;
+  for (const r of origin) {
+    if (known.has(runSig(r))) continue;
+    known.add(runSig(r));
+    runs.push(r);
+    originAdded++;
+  }
+  console.log("рейсов из Берёзовки:", origin.length, "| добавлено:", originAdded);
+  warnings.forEach((w) => console.log("  предупреждение:", w));
 
   const out = {
-    source: "https://" + HOST + "/ (prog=raspis2 + prog=getstation2 + fload.php: пригород)",
+    source: "https://" + HOST + "/ (raspis2 + getstation2 + fload.php: t0 пригород, t1 прямые междугородные; табло городов назначения)",
     station_id: STATION_ID,
     scraped_at: new Date().toISOString(),
     total: runs.length,
+    warnings,
     runs,
   };
   fs.writeFileSync(path.join(OUT_DIR, "board.json"), JSON.stringify(out, null, 1), "utf8");
   console.log("готово:", runs.length, "рейсов ->", path.join(OUT_DIR, "board.json"));
-  console.log("из Берёзовки:", runs.filter((r) => r.dir === "out").length,
-              "| в Берёзовку:", runs.filter((r) => r.dir === "in").length);
+  console.log("едут дальше Берёзовки:", runs.filter((r) => r.dir === "out").length,
+              "| заканчиваются в Берёзовке:", runs.filter((r) => r.dir === "in").length);
 }
 
 main().catch((e) => {

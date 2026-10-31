@@ -7,6 +7,10 @@
     в репозиторий, только если расписание реально изменилось (метка времени
     сбора в сравнении не участвует).
 
+    После проверки сверяет рейсы, начинающиеся в Берёзовке, с поиском
+    ticketbus.by (check_directions.js). Расхождения ничего не блокируют:
+    они пишутся в _tools/divergence.txt и показываются уведомлением Windows.
+
     Запускается планировщиком задач Windows (_tools\register-task.ps1)
     или вручную — двойным щелчком по _tools\update-local.cmd.
 
@@ -35,6 +39,8 @@ $Root = Split-Path -Parent $PSScriptRoot
 $LogFile = Join-Path $PSScriptRoot "update-local.log"
 $DataFile = Join-Path $Root "data.js"
 $DataChanged = Join-Path $PSScriptRoot "data_changed.js"
+$Directions = Join-Path $PSScriptRoot "check_directions.js"
+$Divergence = Join-Path $PSScriptRoot "divergence.txt"
 
 # Без этого в скрытой задаче русский вывод node/git может прийти в OEM-кодировке.
 try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { }
@@ -86,6 +92,52 @@ function Invoke-Native {
     return [pscustomobject]@{ Code = $code; Output = $out }
 }
 
+# Всплывающее уведомление Windows. Сначала пробуем настоящий тост (WinRT),
+# если не получилось — значок в области уведомлений. Ошибки не критичны:
+# уведомление не должно ломать обновление.
+function Show-Notification {
+    param(
+        [string]$Title,
+        [string]$Message
+    )
+    $short = $Message
+    if ($short.Length -gt 600) { $short = $short.Substring(0, 600) + "…" }
+
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+
+        $esc = { param($s) [System.Security.SecurityElement]::Escape($s) }
+        $xmlText = '<toast><visual><binding template="ToastGeneric"><text>' +
+            (& $esc $Title) + '</text><text>' + (& $esc $short) + '</text>' +
+            '</binding></visual></toast>'
+
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml($xmlText)
+        $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+        # AppId самого PowerShell — отдельное приложение регистрировать не нужно.
+        $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+        return
+    }
+    catch { }
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $icon = New-Object System.Windows.Forms.NotifyIcon
+        $icon.Icon = [System.Drawing.SystemIcons]::Information
+        $icon.BalloonTipTitle = $Title
+        $icon.BalloonTipText = $short
+        $icon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+        $icon.Visible = $true
+        $icon.ShowBalloonTip(20000)
+        Start-Sleep -Seconds 12
+        $icon.Dispose()
+    }
+    catch { }
+}
+
 # лог не должен расти бесконечно
 if ((Test-Path $LogFile) -and (Get-Item $LogFile).Length -gt 512KB) {
     Move-Item $LogFile ($LogFile + ".1") -Force
@@ -127,6 +179,22 @@ try {
 
     $check = Invoke-Native "проверяю данные" "node" @((Join-Path $PSScriptRoot "check_data.js"))
     if ($check.Code -ne 0) { throw "проверка data.js не пройдена (код $($check.Code))" }
+
+    # 3b. Сверка с поиском ticketbus.by: рейсы, начинающиеся в Берёзовке.
+    #     Она ничего не блокирует — только предупреждает, что сайт показывает
+    #     другое расписание, чем мы собрали.
+    $dirs = Invoke-Native "сверяю направления с поиском ticketbus.by" "node" @($Directions)
+    if ($dirs.Code -eq 2) {
+        $report = ""
+        try { $report = (Get-Content $Divergence -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -First 12) -join [Environment]::NewLine } catch { }
+        Write-Log "расхождения с ticketbus.by — подробности в $Divergence"
+        if (-not $DryRun) {
+            Show-Notification "Расписание: расхождения с ticketbus.by" $report
+        }
+    }
+    elseif ($dirs.Code -ne 0) {
+        Write-Log "сверку направлений выполнить не удалось (код $($dirs.Code)) — продолжаю"
+    }
 
     # 4. Сравнение с версией в репозитории без метки времени сбора.
     $diff = Invoke-Native "сравниваю расписание с версией в репозитории" "node" @($DataChanged, "--head", $DataFile)
@@ -172,5 +240,8 @@ try {
 catch {
     Write-Log ("ОШИБКА: " + $_.Exception.Message)
     Write-Log "=== завершено с ошибкой ==="
+    if (-not $DryRun) {
+        Show-Notification "Расписание Берёзовки: ошибка обновления" $_.Exception.Message
+    }
     exit 1
 }

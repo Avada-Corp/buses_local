@@ -105,9 +105,10 @@ Pages: *Settings → Pages → Deploy from a branch → `main` / root*.
 (они обновляются сами — стратегия network-first).
 
 ```powershell
-node _tools\scrape_ticketbus.js
+node _tools\scrape_ticketbus.js     # табло станции + fload.php + табло городов назначения
 node _tools\build_live_data.js
 node _tools\check_data.js
+node _tools\check_directions.js     # необязательно: сверка с поиском ticketbus.by
 node _tools\check_pwa.js            # необязательно: локальная проверка PWA
 
 Copy-Item data.js "$env:USERPROFILE\berezovka-site\data.js"
@@ -148,11 +149,14 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "08:00,20:
 Что делает задача `BusesScheduleUpdate` (дважды в день, в 12:00 и 19:00):
 
 1. `git pull --ff-only` — если в проекте нет незакоммиченных изменений;
-2. `node _tools/scrape_ticketbus.js` — до 3 попыток с паузой 60 секунд (междугородное
-   табло, схемы остановок и пригородная таблица `fload.php`);
+2. `node _tools/scrape_ticketbus.js` — до 3 попыток с паузой 60 секунд (табло станции,
+   схемы остановок, `fload.php` с прямыми рейсами и табло городов назначения);
 3. `node _tools/build_live_data.js` — новый `data.js`;
 4. `node _tools/check_data.js` — при ошибке пуш не выполняется, старые данные остаются;
-5. если расписание реально изменилось (метка времени сбора не в счёт) —
+5. `node _tools/check_directions.js` — сверка рейсов из Берёзовки с поиском ticketbus.by
+   за 7 дней. Расхождения не блокируют пуш: отчёт в `_tools/divergence.txt` плюс
+   уведомление Windows;
+6. если расписание реально изменилось (метка времени сбора не в счёт) —
    коммит «расписание: 25.10.2026 12:00» и `git push`; Pages пересобирается сам.
 
 Полезно знать:

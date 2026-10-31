@@ -53,7 +53,9 @@ const inn = trips.filter((t) => t.d === "in");
 
 const seen = Object.create(null);
 trips.forEach((t) => {
-  const k = [t.d, t.t, t.p, t.dl].join("|");
+  // Маршрут и прибытие в ключе: в 12:30 в Лиду идут два разных рейса
+  // (проходящий СОЛИГОРСК-ЛИДА и наш БЕРЕЗОВКА-ЛИДА) — это не дубликат.
+  const k = [t.d, t.r, t.t, t.a, t.p, t.dl].join("|");
   if (seen[k]) err("дубликат рейса: " + k);
   seen[k] = 1;
 });

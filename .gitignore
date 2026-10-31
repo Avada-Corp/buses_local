@@ -39,6 +39,7 @@ desktop.ini
 
 # ─── локальные логи и секреты ──────────────────────────────────────────────
 *.log
+_tools/divergence.txt
 .env
 .env.*
 node_modules/
