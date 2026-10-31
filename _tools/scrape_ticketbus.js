@@ -36,6 +36,7 @@ const path = require("path");
 const HOST = "ticketbus.by";
 const STATION_ID = process.argv[2] || "409012";
 const OUT_DIR = path.join(__dirname, "live");
+const REQUEST_TIMEOUT = 30000; // сайт иногда принимает соединение и молчит
 
 function request(pathname, body, method) {
   return new Promise((resolve, reject) => {
@@ -58,6 +59,9 @@ function request(pathname, body, method) {
         res.on("end", () => resolve(data));
       }
     );
+    req.setTimeout(REQUEST_TIMEOUT, () => {
+      req.destroy(new Error("нет ответа за " + REQUEST_TIMEOUT / 1000 + " с"));
+    });
     req.on("error", reject);
     if (body) req.write(body);
     req.end();

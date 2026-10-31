@@ -22,6 +22,7 @@ const STATION_ID = process.argv[2] || "409012";
 const ROOT = path.join(__dirname, "..");
 const DIVERGENCE = path.join(__dirname, "divergence.txt");
 const DAYS_AHEAD = 7;
+const REQUEST_TIMEOUT = 30000; // сайт иногда принимает соединение и молчит
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const isStation = (s) => /^БЕР[ЁЕ]ЗОВКА(\s|$)/.test(String(s || ""));
@@ -56,6 +57,9 @@ function request(pathname, body) {
       }
     );
     req.on("error", reject);
+    req.setTimeout(REQUEST_TIMEOUT, () => {
+      req.destroy(new Error("нет ответа за " + REQUEST_TIMEOUT / 1000 + " с"));
+    });
     if (body) req.write(body);
     req.end();
   });
