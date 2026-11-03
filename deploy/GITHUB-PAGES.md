@@ -109,6 +109,7 @@ node _tools\scrape_ticketbus.js     # табло станции + fload.php + т
 node _tools\build_live_data.js
 node _tools\check_data.js
 node _tools\check_directions.js     # необязательно: сверка с поиском ticketbus.by
+node _tools\check_infobus.js        # необязательно: что продаётся на infobus.by, но нет у нас
 node _tools\check_pwa.js            # необязательно: локальная проверка PWA
 
 Copy-Item data.js "$env:USERPROFILE\berezovka-site\data.js"
@@ -156,7 +157,9 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1 -At "08:00,20:
 5. `node _tools/check_directions.js` — сверка рейсов из Берёзовки с поиском ticketbus.by
    за 7 дней. Расхождения не блокируют пуш: отчёт в `_tools/divergence.txt` плюс
    уведомление Windows;
-6. если расписание реально изменилось (метка времени сбора не в счёт) —
+6. `node _tools/check_infobus.js` — сверка с infobus.by: что продаётся из Берёзовки,
+   но отсутствует у нас (дописывает тот же `_tools/divergence.txt`). Тоже не блокирует;
+7. если расписание реально изменилось (метка времени сбора не в счёт) —
    коммит «расписание: 25.10.2026 12:00» и `git push`; Pages пересобирается сам.
 
 Полезно знать:

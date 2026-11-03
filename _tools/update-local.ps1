@@ -7,9 +7,13 @@
     в репозиторий, только если расписание реально изменилось (метка времени
     сбора в сравнении не участвует).
 
-    После проверки сверяет рейсы, начинающиеся в Берёзовке, с поиском
-    ticketbus.by (check_directions.js). Расхождения ничего не блокируют:
-    они пишутся в _tools/divergence.txt и показываются уведомлением Windows.
+    После проверки сверяет расписание с двумя источниками:
+      check_directions.js — рейсы, начинающиеся в Берёзовке, с поиском
+        ticketbus.by (сайт показывает только онлайн-продажу);
+      check_infobus.js — что продаётся из Берёзовки на infobus.by, но
+        отсутствует у нас.
+    Расхождения ничего не блокируют: они пишутся в _tools/divergence.txt
+    и показываются уведомлением Windows.
 
     Запускается планировщиком задач Windows (_tools\register-task.ps1)
     или вручную — двойным щелчком по _tools\update-local.cmd.
@@ -40,6 +44,7 @@ $LogFile = Join-Path $PSScriptRoot "update-local.log"
 $DataFile = Join-Path $Root "data.js"
 $DataChanged = Join-Path $PSScriptRoot "data_changed.js"
 $Directions = Join-Path $PSScriptRoot "check_directions.js"
+$Infobus = Join-Path $PSScriptRoot "check_infobus.js"
 $Divergence = Join-Path $PSScriptRoot "divergence.txt"
 
 # Без этого в скрытой задаче русский вывод node/git может прийти в OEM-кодировке.
@@ -180,20 +185,46 @@ try {
     $check = Invoke-Native "проверяю данные" "node" @((Join-Path $PSScriptRoot "check_data.js"))
     if ($check.Code -ne 0) { throw "проверка data.js не пройдена (код $($check.Code))" }
 
-    # 3b. Сверка с поиском ticketbus.by: рейсы, начинающиеся в Берёзовке.
-    #     Она ничего не блокирует — только предупреждает, что сайт показывает
-    #     другое расписание, чем мы собрали.
+    # 3b-3c. Сверки с источниками. Ничего не блокируют — только предупреждают,
+    #        что сайт показывает не то же расписание, что собрали мы.
+    #        check_directions.js перезаписывает divergence.txt, check_infobus.js
+    #        дописывает в него свою секцию, поэтому порядок важен.
+    $alerts = @()
+
     $dirs = Invoke-Native "сверяю направления с поиском ticketbus.by" "node" @($Directions)
     if ($dirs.Code -eq 2) {
         $report = ""
         try { $report = (Get-Content $Divergence -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -First 12) -join [Environment]::NewLine } catch { }
         Write-Log "расхождения с ticketbus.by — подробности в $Divergence"
-        if (-not $DryRun) {
-            Show-Notification "Расписание: расхождения с ticketbus.by" $report
-        }
+        $alerts += $report
     }
     elseif ($dirs.Code -ne 0) {
         Write-Log "сверку направлений выполнить не удалось (код $($dirs.Code)) — продолжаю"
+    }
+
+    $infobus = Invoke-Native "сверяю продажу с infobus.by" "node" @($Infobus)
+    if ($infobus.Code -eq 2) {
+        # В divergence.txt выше могла быть секция ticketbus.by — берём только
+        # последнюю секцию infobus.by, чтобы уведомление было по делу.
+        $section = ""
+        try {
+            $all = @(Get-Content $Divergence -Encoding UTF8 -ErrorAction SilentlyContinue)
+            $start = 0
+            for ($k = $all.Count - 1; $k -ge 0; $k--) {
+                if ($all[$k] -match "infobus\.by: есть в продаже") { $start = $k; break }
+            }
+            $section = ($all[$start..($all.Count - 1)] | Select-Object -First 12) -join [Environment]::NewLine
+        }
+        catch { }
+        Write-Log "расхождения с infobus.by — подробности в $Divergence"
+        $alerts += $section
+    }
+    elseif ($infobus.Code -ne 0) {
+        Write-Log "сверку с infobus.by выполнить не удалось (код $($infobus.Code)) — продолжаю"
+    }
+
+    if ($alerts.Count -gt 0 -and -not $DryRun) {
+        Show-Notification "Расписание: расхождения с источниками" ($alerts -join [Environment]::NewLine)
     }
 
     # 4. Сравнение с версией в репозитории без метки времени сбора.

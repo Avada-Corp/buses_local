@@ -112,6 +112,21 @@ powershell -ExecutionPolicy Bypass -File _tools\register-task.ps1
 Windows (при ошибке обновления — тоже). Направления, которых нет в онлайн-продаже
 (Минск — «продажа только в автобусе»), при сверке пропускаются.
 
+Затем `_tools/check_infobus.js` проверяет, что продаётся из Берёзовки на
+[infobus.by](https://infobus.by/), но отсутствует у нас. Сверяются все направления
+из каталога сайта за две даты с разными днями недели; совпадение — по времени
+отправления с Берёзовки (если в это время у нас вообще есть рейс, пункт считается
+покрытым, ведь infobus продаёт и до промежуточных остановок). Пропуски дописываются
+в тот же `divergence.txt` одной строкой на рейс — с конечным пунктом, перевозчиком
+и датами — и попадают в уведомление. Первый запуск занимает около двух минут:
+скрипт определяет ID городов infobus и кэширует их на 30 дней в
+`_tools/live/infobus_cities.json`.
+
+**Рейсы, которых нет на табло.** Подтверждённые другим источником (фото табло,
+infobus.by) рейсы хранятся в `_tools/extra_trips.json` и добавляются при каждой
+сборке, поэтому не теряются при обновлении. Если табло начнёт отдавать такой рейс
+само, дополнение пропускается — дубликата не будет.
+
 **Вручную, локально** (или двойной щелчок по `_tools\update-local.cmd`):
 
 ```sh
@@ -119,6 +134,7 @@ node _tools/scrape_ticketbus.js     # табло Берёзовки + fload.php 
 node _tools/build_live_data.js      # собирает data.js для страницы
 node _tools/check_data.js           # проверяет структуру данных (должно быть «проверки пройдены ✔»)
 node _tools/check_directions.js     # необязательно: сверка с поиском ticketbus.by -> _tools/divergence.txt
+node _tools/check_infobus.js        # необязательно: что продаётся на infobus.by, но нет у нас (после check_directions)
 node _tools/check_pwa.js            # необязательно: манифест, service worker, офлайн-режим
 ```
 
@@ -165,6 +181,8 @@ ssh user@IP 'cd /var/www/berezovka && nohup python3 -m http.server 8423 --bind 0
 | `_tools/build_live_data.js` | сборка `data.js` из `_tools/live/board.json` |
 | `_tools/check_data.js` | проверка `data.js` (время, дни, остановки, дубликаты) |
 | `_tools/check_directions.js` | сверка рейсов из Берёзовки с поиском ticketbus.by, отчёт в `_tools/divergence.txt` |
+| `_tools/check_infobus.js` | сверка с infobus.by: что продаётся из Берёзовки, но отсутствует у нас; дописывает `_tools/divergence.txt` |
+| `_tools/extra_trips.json` | рейсы, подтверждённые фото табло или infobus.by: добавляются при сборке `data.js` |
 | `_tools/data_changed.js` | сравнение `data.js` с версией в репозитории без метки времени сбора |
 | `_tools/page_script.js` | исходник скрипта страницы (вставляется в `index.html`) |
 | `_tools/make_icons.js` | перерисовка иконок в `icons/` (headless Chrome) |

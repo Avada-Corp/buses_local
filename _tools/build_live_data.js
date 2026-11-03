@@ -29,6 +29,10 @@ const path = require("path");
 
 const SRC = path.join(__dirname, "live", "board.json");
 const OUT = path.join(__dirname, "..", "data.js");
+// Рейсы, которых нет на табло ticketbus.by, но которые подтверждены другим
+// источником (фото табло, infobus.by). Хранятся отдельно, чтобы пережить
+// пересборку data.js. Формат описан в _tools/extra_trips.json.
+const EXTRA = path.join(__dirname, "extra_trips.json");
 
 const DAYS = [["Пн", 0], ["Вт", 1], ["Ср", 2], ["Чт", 3], ["Пт", 4], ["Сб", 5], ["Вс", 6]];
 const toMin = (t) => {
@@ -131,6 +135,50 @@ function main() {
     trips.push(t);
   }
 
+  const isStationName = (name) => /^БЕР[ЁЕ]ЗОВКА(\s|$)/.test(String(name || ""));
+
+  // Один «прогон» маршрута -> рейс(ы) из Берёзовки и/или в Берёзовку.
+  function addRun(route, note, w, daysRaw, stops, at, only) {
+    if (at < 0 || at >= stops.length) {
+      skipped.push(route + " — нет остановки Берёзовка");
+      return;
+    }
+
+    // из Берёзовки: станция не последняя
+    if (at < stops.length - 1 && (!only || only === "out")) {
+      const end = stops[stops.length - 1];
+      const t = stops[at][2] || stops[at][3];
+      const a = end[3] || end[2];
+      const rc = [];
+      for (let i = at + 1; i < stops.length; i++) {
+        const ci = cidx(cityOf(stations[stops[i][0]]));
+        if (ci >= 0 && !rc.some((p) => p[0] === ci)) rc.push([ci, i]);
+      }
+      addTrip({
+        d: "out", r: route, t, a, x: toMin(a) < toMin(t),
+        w, dl: dayLabel(w), dr: String(daysRaw || "").trim(), note,
+        at, p: end[0], pc: cidx(cityOf(stations[end[0]])), s: stops, rc,
+      });
+    }
+
+    // в Берёзовку: станция не первая
+    if (at > 0 && (!only || only === "in")) {
+      const start = stops[0];
+      const t = stops[at][3] || stops[at][2];
+      const a = start[2] || start[3];
+      const rc = [];
+      for (let i = 0; i < at; i++) {
+        const ci = cidx(cityOf(stations[stops[i][0]]));
+        if (ci >= 0 && !rc.some((p) => p[0] === ci)) rc.push([ci, i]);
+      }
+      addTrip({
+        d: "in", r: route, t, a, x: toMin(a) > toMin(t),
+        w, dl: dayLabel(w), dr: String(daysRaw || "").trim(), note,
+        at, p: start[0], pc: cidx(cityOf(stations[start[0]])), s: stops, rc,
+      });
+    }
+  }
+
   board.runs.forEach((run) => {
     const route = String(run.route || "").split(/\s*\/\s*/)[0].trim();
     const note = run.note || "";
@@ -150,46 +198,36 @@ function main() {
       s.dep || "",
       s.arr || "",
     ]);
-    const at = run.at;
-    if (at < 0 || at >= stops.length) {
-      skipped.push(route + " — нет остановки Берёзовка");
-      return;
-    }
-
-    // из Берёзовки: станция не последняя
-    if (at < stops.length - 1) {
-      const end = stops[stops.length - 1];
-      const t = stops[at][2] || stops[at][3];
-      const a = end[3] || end[2];
-      const rc = [];
-      for (let i = at + 1; i < stops.length; i++) {
-        const ci = cidx(cityOf(stations[stops[i][0]]));
-        if (ci >= 0 && !rc.some((p) => p[0] === ci)) rc.push([ci, i]);
-      }
-      addTrip({
-        d: "out", r: route, t, a, x: toMin(a) < toMin(t),
-        w, dl: dayLabel(w), dr: String(run.daysRaw || "").trim(), note,
-        at, p: end[0], pc: cidx(cityOf(stations[end[0]])), s: stops, rc,
-      });
-    }
-
-    // в Берёзовку: станция не первая
-    if (at > 0) {
-      const start = stops[0];
-      const t = stops[at][3] || stops[at][2];
-      const a = start[2] || start[3];
-      const rc = [];
-      for (let i = 0; i < at; i++) {
-        const ci = cidx(cityOf(stations[stops[i][0]]));
-        if (ci >= 0 && !rc.some((p) => p[0] === ci)) rc.push([ci, i]);
-      }
-      addTrip({
-        d: "in", r: route, t, a, x: toMin(a) > toMin(t),
-        w, dl: dayLabel(w), dr: String(run.daysRaw || "").trim(), note,
-        at, p: start[0], pc: cidx(cityOf(stations[start[0]])), s: stops, rc,
-      });
-    }
+    addRun(route, note, w, run.daysRaw, stops, run.at);
   });
+
+  // Дополнения: рейсы, подтверждённые фото табло или infobus.by, но
+  // отсутствующие на табло ticketbus.by. Если табло начнёт их отдавать
+  // само — дополнение пропускается, чтобы не было дубликата.
+  if (fs.existsSync(EXTRA)) {
+    const extra = JSON.parse(fs.readFileSync(EXTRA, "utf8"));
+    extra.forEach((e) => {
+      const route = String(e.route || "").trim();
+      const w = Array.isArray(e.w) && e.w.length ? e.w : parseDays(e.days);
+      if (!route || !w.length) {
+        skipped.push("дополнение без маршрута или дней: " + JSON.stringify(e).slice(0, 80));
+        return;
+      }
+      if (trips.some((t) => t.t === e.t && t.r === route)) {
+        skipped.push(route + " " + e.t + " — уже есть в табло");
+        return;
+      }
+      const stops = (e.stops || []).map((s) => [
+        sidx(s.n, s.addr),
+        Math.round((s.km || 0) * 10) / 10,
+        s.dep || "",
+        s.arr || "",
+      ]);
+      const at = stops.findIndex((s) => isStationName(stations[s[0]]));
+      addRun(route, e.note || "", w, e.days || dayLabel(w), stops, at, e.d);
+    });
+    if (extra.length) console.log("дополнений из extra_trips.json:", extra.length);
+  }
 
   trips.sort((p, q) => (p.d === q.d ? toMin(p.t) - toMin(q.t) : p.d === "out" ? -1 : 1));
 
